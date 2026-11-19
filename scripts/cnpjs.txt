@@ -1,0 +1,4 @@
+# Cole aqui os CNPJs que deseja enriquecer e importar para o CRM (um por linha)
+# Podem ter pontuação ou apenas números. Linhas começando com '#' são ignoradas.
+
+00.000.000/0001-91

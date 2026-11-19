@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+.dark {
   --background: #09090b;
   --foreground: #f4f4f5;
 }
@@ -19,7 +26,7 @@ body {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-3.5px);
+    transform: translateY(-3px);
   }
 }
 
