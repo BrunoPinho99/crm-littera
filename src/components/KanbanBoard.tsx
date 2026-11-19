@@ -15,13 +15,16 @@ import {
   Edit2,
   Trash2,
   UserCheck,
-  CheckCircle2
+  CheckCircle2,
+  MessageCircle
 } from 'lucide-react';
+import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
 interface KanbanBoardProps {
   leads: LeadEscolar[];
   onStatusChange: (leadId: string, newStatus: LeadEscolar['status']) => void;
   onSendEmail: (lead: LeadEscolar) => void;
+  onSendWhatsApp?: (lead: LeadEscolar) => void;
   onEditLead: (lead: LeadEscolar) => void;
   onDeleteLead: (leadId: string) => void;
   onScheduleMeeting?: (lead: LeadEscolar) => void;
@@ -79,6 +82,7 @@ export default function KanbanBoard({
   leads,
   onStatusChange,
   onSendEmail,
+  onSendWhatsApp,
   onEditLead,
   onDeleteLead,
   onScheduleMeeting,
@@ -255,18 +259,40 @@ export default function KanbanBoard({
 
                         {/* Ações rápidas de avanço */}
                         {lead.status === 'novo' ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSendEmail(lead);
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] transition cursor-pointer shadow-xs"
-                            title="Disparar email de apresentação comercial"
-                          >
-                            <Send className="w-3 h-3" />
-                            <span>Contatar</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {lead.telefone_escola && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onSendWhatsApp) {
+                                    onSendWhatsApp(lead);
+                                  } else {
+                                    const msg = generateWhatsAppMessage(lead);
+                                    window.open(getWhatsAppUrl(lead.telefone_escola!, msg), '_blank');
+                                    onStatusChange(lead.id, 'contato_enviado');
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition cursor-pointer shadow-xs"
+                                title="Enviar mensagem personalizada no WhatsApp"
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                <span>Zap</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSendEmail(lead);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] transition cursor-pointer shadow-xs"
+                              title="Disparar e-mail automático via Gmail"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>E-mail</span>
+                            </button>
+                          </div>
                         ) : lead.status === 'contato_enviado' ? (
                           <button
                             type="button"

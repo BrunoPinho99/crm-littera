@@ -1,5 +1,6 @@
 'use server';
 
+import { getEmailTransporter, generateLeadEmailContent, GMAIL_USER } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
 import { supabase } from '@/lib/supabase';
 import { LeadEscolar } from '@/types/database';
@@ -420,3 +421,68 @@ export async function runAgentScout(count: number = 20): Promise<{
     };
   }
 }
+
+export async function sendLeadEmailDirect(leadId: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  simulated?: boolean;
+}> {
+  try {
+    const { data: lead, error: fetchError } = await supabase
+      .from('leads_escolares')
+      .select('*')
+      .eq('id', leadId)
+      .single();
+
+    if (fetchError || !lead) {
+      return { success: false, error: 'Lead não encontrado.' };
+    }
+
+    const recipient = lead.email_decisor?.trim() || lead.email_escola?.trim();
+    if (!recipient) {
+      return { success: false, error: 'Lead não possui e-mail cadastrado.' };
+    }
+
+    const { subject, text, html } = generateLeadEmailContent({
+      nome_escola: lead.nome_escola,
+      nome_decisor: lead.nome_decisor,
+    });
+
+    const transporter = getEmailTransporter();
+
+    if (!transporter) {
+      // Sem senha de app cadastrada ainda: atualiza status e instrui configuração
+      await markContactSent(leadId);
+      return {
+        success: true,
+        simulated: true,
+        message: `Status atualizado para 'Contato Enviado'! Para disparo real automático pelo Gmail, configure GMAIL_APP_PASSWORD no .env.local.`,
+      };
+    }
+
+    // Envio real via Nodemailer / Gmail SMTP
+    await transporter.sendMail({
+      from: `"Bruno Pinho | Littera Educacional" <${GMAIL_USER}>`,
+      to: recipient,
+      subject,
+      text,
+      html,
+    });
+
+    await markContactSent(leadId);
+
+    return {
+      success: true,
+      simulated: false,
+      message: `E-mail enviado com sucesso para ${recipient} via ${GMAIL_USER}!`,
+    };
+  } catch (err: unknown) {
+    console.error('Erro ao enviar e-mail:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha ao enviar e-mail via Gmail.',
+    };
+  }
+}
+

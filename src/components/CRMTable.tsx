@@ -2,13 +2,15 @@
 
 import React, { useState, useTransition, useMemo } from 'react';
 import { LeadEscolar } from '@/types/database';
-import { markContactSent, updateLeadStatus, createLead, updateLead, deleteLead } from '@/actions/leads';
+import { markContactSent, updateLeadStatus, createLead, updateLead, deleteLead, sendLeadEmailDirect } from '@/actions/leads';
 import MascotAgent, { MascotMode } from './MascotAgent';
 import Sidebar from './Sidebar';
 import KanbanBoard from './KanbanBoard';
 import WordSwap from './WordSwap';
 import LeadModal from './LeadModal';
 import ScheduleMeetingModal from './ScheduleMeetingModal';
+import AutoDispatcherModal from './AutoDispatcherModal';
+import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 import {
   Search,
   Mail,
@@ -26,7 +28,9 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Award
+  Award,
+  MessageCircle,
+  Play
 } from 'lucide-react';
 
 interface CRMDashboardProps {
@@ -54,6 +58,18 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   // Estados do Modal de Google Agenda
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [scheduleLead, setScheduleLead] = useState<LeadEscolar | null>(null);
+
+  // Estados da Automação de Disparo de E-mails
+  const [isAutoDispatcherOpen, setIsAutoDispatcherOpen] = useState(false);
+  const [isAutoDispatching, setIsAutoDispatching] = useState(false);
+  const [dispatchProgress, setDispatchProgress] = useState({
+    current: 0,
+    total: 0,
+    currentSchool: '',
+    successCount: 0,
+    errorCount: 0,
+    isSimulated: false,
+  });
 
   // Regra de curadoria SDR: Decisor identificado E telefone/whatsapp + email
   const isHighPotentialLead = (lead: LeadEscolar) => {
@@ -183,32 +199,17 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     setUpdatingId(null);
   };
 
-  const handleSendEmail = (lead: LeadEscolar) => {
+  const handleSendEmail = async (lead: LeadEscolar) => {
     const recipient = lead.email_decisor || lead.email_escola || '';
-    const schoolName = lead.nome_escola;
-    const recipientName = lead.nome_decisor ? lead.nome_decisor : 'Equipe Pedagógica / Direção';
-
-    const subject = encodeURIComponent(
-      `Inovação Pedagógica & Gestão Digital: Apresentação para ${schoolName}`
-    );
-    const body = encodeURIComponent(
-      `Olá, ${recipientName},\n\n` +
-      `Espero que este e-mail o encontre bem.\n\n` +
-      `Acompanho a trajetória de excelência e dedicação do ${schoolName} em Brasília e gostaria de apresentar como nossa plataforma educacional tem auxiliado instituições a otimizar o engajamento dos alunos e simplificar rotinas acadêmicas.\n\n` +
-      `Gostaria de agendar uma breve conversa de 15 minutos esta semana para demonstrar como escolas parceiras aumentaram a retenção e facilitaram a comunicação com as famílias.\n\n` +
-      `Qual seria o melhor dia e horário para conversarmos?\n\n` +
-      `Atenciosamente,\n` +
-      `Equipe Littera Educacional\n` +
-      `contato@littera.edu.br | Brasília - DF`
-    );
-
-    const mailtoUrl = `mailto:${recipient}?subject=${subject}&body=${body}`;
+    if (!recipient) {
+      alert('Esta empresa não possui e-mail cadastrado.');
+      return;
+    }
 
     setUpdatingId(lead.id);
-    startTransition(async () => {
-      window.location.href = mailtoUrl;
-
-      const res = await markContactSent(lead.id);
+    try {
+      // Disparo automático via Server Action / Gmail
+      const res = await sendLeadEmailDirect(lead.id);
       if (res.success) {
         setLeads((prev) =>
           prev.map((item) =>
@@ -217,9 +218,103 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
               : item
           )
         );
+        if (res.simulated) {
+          console.info(res.message);
+        }
+      } else {
+        alert(`Erro ao enviar e-mail: ${res.error || 'Falha no disparo'}`);
       }
+    } catch (err) {
+      console.error('Erro ao acionar disparo de e-mail:', err);
+    } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleSendWhatsApp = (lead: LeadEscolar) => {
+    if (!lead.telefone_escola) {
+      alert('Esta empresa não possui telefone/WhatsApp cadastrado.');
+      return;
+    }
+
+    const message = generateWhatsAppMessage(lead);
+    const url = getWhatsAppUrl(lead.telefone_escola, message);
+    window.open(url, '_blank');
+
+    // Atualiza status do lead no CRM
+    handleStatusChange(lead.id, 'contato_enviado');
+  };
+
+  // Automação em Massa de Disparo de E-mails
+  const handleOpenAutoDispatcher = () => {
+    const eligibleLeads = leads.filter(
+      (l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))
+    );
+    setDispatchProgress({
+      current: 0,
+      total: eligibleLeads.length,
+      currentSchool: '',
+      successCount: 0,
+      errorCount: 0,
+      isSimulated: false,
     });
+    setIsAutoDispatcherOpen(true);
+  };
+
+  const handleStartAutoDispatch = async () => {
+    const eligibleLeads = leads.filter(
+      (l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))
+    );
+
+    if (eligibleLeads.length === 0) return;
+
+    setIsAutoDispatching(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let isSimulated = false;
+
+    for (let i = 0; i < eligibleLeads.length; i++) {
+      const currentLead = eligibleLeads[i];
+      setDispatchProgress((prev) => ({
+        ...prev,
+        current: i + 1,
+        currentSchool: currentLead.nome_escola,
+      }));
+
+      try {
+        const res = await sendLeadEmailDirect(currentLead.id);
+        if (res.success) {
+          successCount++;
+          if (res.simulated) isSimulated = true;
+          setLeads((prev) =>
+            prev.map((item) =>
+              item.id === currentLead.id
+                ? { ...item, status: 'contato_enviado', ultima_interacao: new Date().toISOString() }
+                : item
+            )
+          );
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        console.error(`Erro ao disparar para ${currentLead.nome_escola}:`, err);
+        errorCount++;
+      }
+
+      setDispatchProgress((prev) => ({
+        ...prev,
+        successCount,
+        errorCount,
+        isSimulated,
+      }));
+
+      // Intervalo de segurança entre envios
+      if (i < eligibleLeads.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+    }
+
+    setIsAutoDispatching(false);
   };
 
   const handleRunCurator = () => {
@@ -345,7 +440,17 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 flex-wrap md:flex-nowrap">
+            {/* Botão de Disparo em Massa */}
+            <button
+              onClick={handleOpenAutoDispatcher}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20 transition cursor-pointer"
+              title="Iniciar envio de e-mails em lote para novos leads"
+            >
+              <Play className="w-3.5 h-3.5 fill-white" />
+              <span>Automação de E-mails</span>
+            </button>
+
             {/* Botão Novo Lead (CRUD) */}
             <button
               onClick={handleOpenCreateModal}
@@ -485,6 +590,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
             leads={filteredLeads}
             onStatusChange={handleStatusChange}
             onSendEmail={handleSendEmail}
+            onSendWhatsApp={handleSendWhatsApp}
             onEditLead={handleOpenEditModal}
             onDeleteLead={handleDeleteLead}
             onScheduleMeeting={handleOpenSchedule}
@@ -616,12 +722,23 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                                 <Calendar className="w-4 h-4" />
                               </button>
 
+                              {/* Botão Enviar WhatsApp */}
+                              {lead.telefone_escola && (
+                                <button
+                                  onClick={() => handleSendWhatsApp(lead)}
+                                  className="p-2 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition cursor-pointer"
+                                  title="Enviar mensagem no WhatsApp"
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                </button>
+                              )}
+
                               {/* Botão Enviar E-mail */}
                               <button
                                 onClick={() => handleSendEmail(lead)}
                                 disabled={isUpdating}
                                 className="p-2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
-                                title="Enviar E-mail de Prospecção"
+                                title="Enviar E-mail automático via Gmail"
                               >
                                 {isUpdating ? (
                                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -675,6 +792,16 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
         onClose={() => setIsScheduleOpen(false)}
         lead={scheduleLead}
         onConfirmScheduled={handleConfirmScheduled}
+      />
+
+      {/* MODAL DE AUTOMAÇÃO DE DISPAROS DE E-MAILS */}
+      <AutoDispatcherModal
+        isOpen={isAutoDispatcherOpen}
+        onClose={() => setIsAutoDispatcherOpen(false)}
+        onConfirm={handleStartAutoDispatch}
+        isRunning={isAutoDispatching}
+        totalPending={leads.filter((l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))).length}
+        progress={dispatchProgress}
       />
     </div>
   );
