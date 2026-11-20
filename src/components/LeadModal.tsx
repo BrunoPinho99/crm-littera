@@ -258,10 +258,33 @@ export default function LeadModal({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-slate-900 dark:text-neutral-100">
-                  {mode === 'create' ? 'Cadastrar Nova Escola' : 'Editar Escola & Decisores'}
+                  {mode === 'create' ? 'Cadastrar Nova Escola' : (lead?.nome || 'Editar Escola & Decisores')}
                 </h2>
+                {lead?.site && (
+                  <a
+                    href={lead.site}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:underline border border-blue-100 dark:border-blue-900/50"
+                  >
+                    <Globe className="w-3 h-3" />
+                    <span>Visitar Site</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                )}
+                {lead?.google_rating && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/50">
+                    <Star className="w-3 h-3 fill-current text-amber-500" />
+                    <span>{Number(lead.google_rating).toFixed(1)}</span>
+                    {lead.google_avaliacoes && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                        ({lead.google_avaliacoes} avaliações)
+                      </span>
+                    )}
+                  </span>
+                )}
                 {lead?.precisa_revisao && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
                     <AlertTriangle className="w-3 h-3" />
@@ -651,10 +674,36 @@ export default function LeadModal({
                               • {contato.cargo}
                             </span>
                           )}
+                          {/* Badge de Fonte */}
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700">
+                            {contato.fonte}
+                          </span>
                           {contato.principal && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                               <Star className="w-2.5 h-2.5 fill-current" />
                               Principal
+                            </span>
+                          )}
+                          {/* Link Ver Prova na Fonte */}
+                          {contato.fonte_url && (
+                            <a
+                              href={contato.fonte_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:underline bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40"
+                              title={contato.evidencia ? `Evidência literal: "${contato.evidencia}"` : 'Ver prova na fonte'}
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              <span>ver prova</span>
+                            </a>
+                          )}
+                          {/* Trecho Literal ao passar o mouse */}
+                          {contato.evidencia && (
+                            <span
+                              className="cursor-help px-1.5 py-0.2 rounded text-[9px] font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                              title={`Evidência literal: "${contato.evidencia}"`}
+                            >
+                              &ldquo;{contato.evidencia.slice(0, 45)}...&rdquo;
                             </span>
                           )}
                         </div>

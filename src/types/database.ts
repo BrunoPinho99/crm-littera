@@ -63,6 +63,10 @@ export interface Escola {
   email_geral: string | null;
   site: string | null;
   dominio: string | null;
+  google_place_id?: string | null;
+  google_rating?: number | null;
+  google_avaliacoes?: number | null;
+  site_verificado_em?: string | null;
   matriculas_em: number | null;
   matriculas_total: number | null;
   oferece_ensino_medio: boolean | null;
@@ -98,6 +102,8 @@ export interface Contato {
   fonte: FonteContato;
   fonte_url: string | null;
   confianca: number | null;
+  evidencia?: string | null;
+  custo?: Record<string, unknown> | null;
   principal: boolean;
   descadastrado: boolean;
   criado_em: string;
@@ -127,6 +133,16 @@ export interface AgenteExecucao {
   leads_encontrados: number;
   leads_inseridos: number;
   mensagem: string | null;
+}
+
+export interface CustoAgente {
+  id: string;
+  execucao_id: string | null;
+  escola_id: string;
+  servico: string;
+  unidades: number;
+  custo_estimado_usd: number;
+  criado_em: string;
 }
 
 /**

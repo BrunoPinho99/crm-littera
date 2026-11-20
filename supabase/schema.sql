@@ -70,6 +70,10 @@ CREATE TABLE IF NOT EXISTS public.escolas (
     email_geral TEXT,
     site TEXT,
     dominio TEXT,
+    google_place_id TEXT,
+    google_rating NUMERIC,
+    google_avaliacoes INT,
+    site_verificado_em TIMESTAMPTZ,
     matriculas_em INT,
     matriculas_total INT,
     oferece_ensino_medio BOOLEAN,
@@ -131,6 +135,8 @@ CREATE TABLE IF NOT EXISTS public.contatos (
         CHECK (fonte IN ('qsa', 'site', 'hunter', 'snov', 'apollo', 'manual', 'receita')),
     fonte_url TEXT,
     confianca INT CHECK (confianca IS NULL OR (confianca >= 0 AND confianca <= 100)),
+    evidencia TEXT,
+    custo JSONB,
     principal BOOLEAN DEFAULT false,
     descadastrado BOOLEAN DEFAULT false,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -216,4 +222,26 @@ CREATE TABLE IF NOT EXISTS public.cache_cnpj (
 
 ALTER TABLE public.cache_cnpj ENABLE ROW LEVEL SECURITY;
 -- Sem políticas para anon e authenticated: exclusivo para service_role (rotinas de enriquecimento)
+
+-- 8. Tabela de Custos Detalhados do Agente SDR (Etapa 5)
+CREATE TABLE IF NOT EXISTS public.custos_agente (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execucao_id UUID REFERENCES public.agente_execucoes(id) ON DELETE SET NULL,
+    escola_id UUID REFERENCES public.escolas(id) ON DELETE CASCADE,
+    servico TEXT NOT NULL,
+    unidades NUMERIC NOT NULL DEFAULT 1,
+    custo_estimado_usd NUMERIC NOT NULL DEFAULT 0,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_custos_agente_execucao ON public.custos_agente (execucao_id);
+CREATE INDEX IF NOT EXISTS idx_custos_agente_escola ON public.custos_agente (escola_id);
+
+ALTER TABLE public.custos_agente ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "custos_agente_auth_policy"
+    ON public.custos_agente FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
 
