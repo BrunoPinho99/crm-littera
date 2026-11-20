@@ -18,11 +18,11 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('light');
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('littera-theme') as Theme | null;
     if (saved === 'dark' || saved === 'light') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setThemeState(saved);
       document.documentElement.classList.toggle('dark', saved === 'dark');
     } else {
@@ -31,7 +31,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(initial);
       document.documentElement.classList.toggle('dark', prefersDark);
     }
-    setMounted(true);
   }, []);
 
   const setTheme = (newTheme: Theme) => {

@@ -2,10 +2,15 @@
 
 import { getEmailTransporter, generateLeadEmailContent, GMAIL_USER } from '@/lib/email';
 import { revalidatePath } from 'next/cache';
-import { supabase } from '@/lib/supabase';
+import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 import { LeadEscolar } from '@/types/database';
+import { pickLeadEmail } from '@/lib/contact';
 
 export async function getLeads(): Promise<LeadEscolar[]> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const { data, error } = await supabase
       .from('leads_escolares')
@@ -28,19 +33,29 @@ export async function updateLeadStatus(
   leadId: string,
   newStatus: LeadEscolar['status']
 ): Promise<{ success: boolean; error?: string }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const now = new Date().toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('leads_escolares')
       .update({
         status: newStatus,
         ultima_interacao: now,
       })
-      .eq('id', leadId);
+      .eq('id', leadId)
+      .select('id');
 
     if (error) {
       console.error('Erro ao atualizar status do lead:', error);
       return { success: false, error: error.message };
+    }
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhum registro atualizado: sem permissão ou lead inexistente.',
+      };
     }
 
     try {
@@ -51,11 +66,19 @@ export async function updateLeadStatus(
     return { success: true };
   } catch (err) {
     console.error('Erro na server action updateLeadStatus:', err);
-    return { success: false, error: 'Erro interno ao atualizar lead' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro interno ao atualizar lead',
+    };
   }
 }
 
-export async function createLead(leadData: Omit<LeadEscolar, 'id' | 'created_at' | 'ultima_interacao'>): Promise<{ success: boolean; data?: LeadEscolar; error?: string }> {
+export async function createLead(
+  leadData: Omit<LeadEscolar, 'id' | 'created_at' | 'ultima_interacao'>
+): Promise<{ success: boolean; data?: LeadEscolar; error?: string }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const { data, error } = await supabase
       .from('leads_escolares')
@@ -68,6 +91,13 @@ export async function createLead(leadData: Omit<LeadEscolar, 'id' | 'created_at'
       return { success: false, error: error.message };
     }
 
+    if (!data) {
+      return {
+        success: false,
+        error: 'Nenhum lead criado: sem permissão ou dados inválidos.',
+      };
+    }
+
     try {
       revalidatePath('/');
     } catch {
@@ -76,7 +106,10 @@ export async function createLead(leadData: Omit<LeadEscolar, 'id' | 'created_at'
     return { success: true, data: data as LeadEscolar };
   } catch (err) {
     console.error('Erro na server action createLead:', err);
-    return { success: false, error: 'Erro interno ao criar lead' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro interno ao criar lead',
+    };
   }
 }
 
@@ -84,15 +117,25 @@ export async function updateLead(
   leadId: string,
   leadData: Partial<Omit<LeadEscolar, 'id' | 'created_at'>>
 ): Promise<{ success: boolean; error?: string }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('leads_escolares')
       .update(leadData)
-      .eq('id', leadId);
+      .eq('id', leadId)
+      .select('id');
 
     if (error) {
       console.error('Erro ao atualizar lead:', error);
       return { success: false, error: error.message };
+    }
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhum registro atualizado: sem permissão ou lead inexistente.',
+      };
     }
 
     try {
@@ -103,20 +146,33 @@ export async function updateLead(
     return { success: true };
   } catch (err) {
     console.error('Erro na server action updateLead:', err);
-    return { success: false, error: 'Erro interno ao atualizar lead' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro interno ao atualizar lead',
+    };
   }
 }
 
 export async function deleteLead(leadId: string): Promise<{ success: boolean; error?: string }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('leads_escolares')
       .delete()
-      .eq('id', leadId);
+      .eq('id', leadId)
+      .select('id');
 
     if (error) {
       console.error('Erro ao excluir lead:', error);
       return { success: false, error: error.message };
+    }
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: 'Nada foi excluído: sem permissão ou lead inexistente.',
+      };
     }
 
     try {
@@ -127,24 +183,37 @@ export async function deleteLead(leadId: string): Promise<{ success: boolean; er
     return { success: true };
   } catch (err) {
     console.error('Erro na server action deleteLead:', err);
-    return { success: false, error: 'Erro interno ao deletar lead' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro interno ao deletar lead',
+    };
   }
 }
 
 export async function markContactSent(leadId: string): Promise<{ success: boolean; error?: string }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const now = new Date().toISOString();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('leads_escolares')
       .update({
         status: 'contato_enviado',
         ultima_interacao: now,
       })
-      .eq('id', leadId);
+      .eq('id', leadId)
+      .select('id');
 
     if (error) {
       console.error('Erro ao atualizar status do lead:', error);
       return { success: false, error: error.message };
+    }
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        error: 'Nenhum registro atualizado: sem permissão ou lead inexistente.',
+      };
     }
 
     try {
@@ -155,7 +224,10 @@ export async function markContactSent(leadId: string): Promise<{ success: boolea
     return { success: true };
   } catch (err) {
     console.error('Erro na server action markContactSent:', err);
-    return { success: false, error: 'Erro interno ao atualizar lead' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro interno ao atualizar lead',
+    };
   }
 }
 
@@ -195,7 +267,20 @@ function cleanSchoolName(raw: string): string {
 
   const words = unescaped.split(/\s+/);
   const lowercaseWords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'para', 'com']);
-  const uppercaseWords = new Set(['ce', 'cei', 'cem', 'caas', 'df', 'jk', 'cmdp', 'cmdpii', 'sesi', 'senai', 'sesc', 'unb']);
+  const uppercaseWords = new Set([
+    'ce',
+    'cei',
+    'cem',
+    'caas',
+    'df',
+    'jk',
+    'cmdp',
+    'cmdpii',
+    'sesi',
+    'senai',
+    'sesc',
+    'unb',
+  ]);
 
   const formatted = words.map((w) => {
     const lw = w.toLowerCase().replace(/^[.,-]+|[.,-]+$/g, '');
@@ -207,30 +292,39 @@ function cleanSchoolName(raw: string): string {
   return formatted.join(' ');
 }
 
-function inferDecisor(name: string): { decisor: string; email: string } {
+// Importante: NÃO inventamos e-mails. As fontes públicas (qualotelefone) só trazem telefone,
+// então o e-mail fica vazio até ser cadastrado manualmente ou enriquecido via CNPJ/Apify.
+function inferDecisor(name: string): { decisor: string; email: string | null } {
   const norm = name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
-  const slug = norm.replace(/[^a-z0-9]/g, '').slice(0, 14);
-
   if (/infantil|baby|crianca|pequeno|creche|bercario/.test(norm)) {
-    return {
-      decisor: 'Direção Pedagógica da Educação Infantil',
-      email: `diretoria.${slug}@educacao.df.br`,
-    };
+    return { decisor: 'Direção Pedagógica da Educação Infantil', email: null };
   }
   if (/vestibular|olimpico|aprovacao|curso|exito|alfa/.test(norm)) {
-    return {
-      decisor: 'Direção / Coordenação do Pré-Vestibular',
-      email: `contato.${slug}@educacao.df.br`,
-    };
+    return { decisor: 'Direção / Coordenação do Pré-Vestibular', email: null };
   }
-  return {
-    decisor: 'Coordenação Pedagógica & Ensino Médio',
-    email: `secretaria.${slug}@educacao.df.br`,
-  };
+  return { decisor: 'Coordenação Pedagógica & Ensino Médio', email: null };
+}
+
+async function fetchPhone(detailUrl: string): Promise<string | null> {
+  try {
+    const detRes = await fetch(detailUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!detRes.ok) return null;
+    const h = await detRes.text();
+    const tels = [...h.matchAll(/href=["']tel:([^"']+)["']/g)].map((m) =>
+      m[1].replace(/\D/g, '')
+    );
+    const selected = tels.find((t) => t.startsWith('61') || t.startsWith('5561')) || tels[0];
+    return selected ? formatPhone(selected) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function runAgentScout(count: number = 20): Promise<{
@@ -239,6 +333,9 @@ export async function runAgentScout(count: number = 20): Promise<{
   newLeads: LeadEscolar[];
   message: string;
 }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const baseUrl = 'https://qualotelefone.com/df/brasilia/escolas-particulares';
     let currentUrl = baseUrl;
@@ -247,23 +344,20 @@ export async function runAgentScout(count: number = 20): Promise<{
       bairro: string;
       detailUrl: string;
       decisor: string;
-      email: string;
+      email: string | null;
     }> = [];
 
     // Busca nomes existentes no banco para não duplicar
     const { data: existingData } = await supabase
       .from('leads_escolares')
-      .select('nome_escola');
+      .select('id, nome_escola, telefone_escola');
 
-    const existingNames = new Set(
-      (existingData || []).map((item) =>
-        item.nome_escola
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .trim()
-      )
-    );
+    const normName = (n: string) =>
+      n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+    const existingNames = new Set((existingData || []).map((item) => normName(item.nome_escola)));
+    // Leads já cadastrados SEM telefone: o agente tenta completar o contato em vez de ignorá-los
+    const missingPhoneByName = new Map<string, { id: string; detailUrl: string }>();
 
     for (let page = 1; page <= 5; page++) {
       if (candidates.length >= count) break;
@@ -301,9 +395,14 @@ export async function runAgentScout(count: number = 20): Promise<{
           .toLowerCase()
           .trim();
 
-        if (existingNames.has(normKey) || cleanName.length < 4) {
+        if (existingNames.has(normKey)) {
+          const ex = (existingData || []).find((i) => normName(i.nome_escola) === normKey);
+          if (ex && !ex.telefone_escola && !missingPhoneByName.has(normKey)) {
+            missingPhoneByName.set(normKey, { id: ex.id, detailUrl: href });
+          }
           continue;
         }
+        if (cleanName.length < 4) continue;
 
         existingNames.add(normKey);
 
@@ -338,37 +437,37 @@ export async function runAgentScout(count: number = 20): Promise<{
       }
     }
 
+    // Atualiza contatos de leads existentes que estavam sem telefone
+    let updatedCount = 0;
+    await Promise.all(
+      [...missingPhoneByName.values()].map(async ({ id, detailUrl }) => {
+        const phone = await fetchPhone(detailUrl);
+        if (!phone) return;
+        const { data: upd } = await supabase
+          .from('leads_escolares')
+          .update({ telefone_escola: phone })
+          .eq('id', id)
+          .select('id');
+        if (upd && upd.length > 0) updatedCount++;
+      })
+    );
+
     if (candidates.length === 0) {
       return {
         success: true,
         insertedCount: 0,
         newLeads: [],
-        message: 'Todos os leads encontrados já constam no CRM!',
+        message:
+          updatedCount > 0
+            ? `Nenhum lead novo, mas ${updatedCount} contato(s) existente(s) foram atualizados com telefone.`
+            : 'Todos os leads encontrados já constam no CRM!',
       };
     }
 
     // Enriquecimento concorrente dos telefones e contatos
     const enriched = await Promise.all(
       candidates.map(async (item) => {
-        let phone: string | null = null;
-        try {
-          const detRes = await fetch(item.detailUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
-            signal: AbortSignal.timeout(4000),
-          });
-          if (detRes.ok) {
-            const h = await detRes.text();
-            const tels = [...h.matchAll(/href=["']tel:([^"']+)["']/g)].map((m) => m[1]);
-            const tel61 = tels.find((t) => t.startsWith('61'));
-            const selected = tel61 || tels[0];
-            if (selected) {
-              phone = formatPhone(selected);
-            }
-          }
-        } catch {
-          // ignora falha de detalhe e mantém lead com email e decisor
-        }
-
+        const phone = await fetchPhone(item.detailUrl);
         return {
           nome_escola: item.name,
           cidade: 'Brasília',
@@ -382,7 +481,7 @@ export async function runAgentScout(count: number = 20): Promise<{
       })
     );
 
-    // Salva no Supabase via REST / Client
+    // Salva no Supabase via cliente do usuário autenticado
     const { data: inserted, error: insertError } = await supabase
       .from('leads_escolares')
       .insert(enriched)
@@ -428,6 +527,9 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
   error?: string;
   simulated?: boolean;
 }> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
   try {
     const { data: lead, error: fetchError } = await supabase
       .from('leads_escolares')
@@ -439,9 +541,13 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
       return { success: false, error: 'Lead não encontrado.' };
     }
 
-    const recipient = lead.email_decisor?.trim() || lead.email_escola?.trim();
+    const recipient = pickLeadEmail(lead);
     if (!recipient) {
-      return { success: false, error: 'Lead não possui e-mail cadastrado.' };
+      return {
+        success: false,
+        error:
+          'Lead sem e-mail válido. Cadastre o e-mail real da escola (editar lead). E-mails gerados automaticamente não são aceitos.',
+      };
     }
 
     const { subject, text, html } = generateLeadEmailContent({
@@ -450,32 +556,38 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
     });
 
     const transporter = getEmailTransporter();
-
     if (!transporter) {
-      // Sem senha de app cadastrada ainda: atualiza status e instrui configuração
-      await markContactSent(leadId);
       return {
-        success: true,
-        simulated: true,
-        message: `Status atualizado para 'Contato Enviado'! Para disparo real automático pelo Gmail, configure GMAIL_APP_PASSWORD no .env.local.`,
+        success: false,
+        error: 'GMAIL_APP_PASSWORD não configurada — nenhum e-mail foi enviado.',
       };
     }
 
-    // Envio real via Nodemailer / Gmail SMTP
-    await transporter.sendMail({
-      from: `"Bruno Pinho | Littera Educacional" <${GMAIL_USER}>`,
+    const senderEmail = GMAIL_USER || 'contato@littera.com.br';
+    const info = await transporter.sendMail({
+      from: `"Littera Educacional" <${senderEmail}>`,
       to: recipient,
       subject,
       text,
       html,
     });
 
-    await markContactSent(leadId);
+    if (info.rejected && info.rejected.length > 0) {
+      return { success: false, error: `Gmail rejeitou o destinatário: ${info.rejected.join(', ')}` };
+    }
+
+    const marked = await markContactSent(leadId);
+    if (!marked.success) {
+      return {
+        success: true,
+        message: `E-mail enviado para ${recipient}, mas falhou ao atualizar o status: ${marked.error}`,
+      };
+    }
 
     return {
       success: true,
       simulated: false,
-      message: `E-mail enviado com sucesso para ${recipient} via ${GMAIL_USER}!`,
+      message: `E-mail enviado com sucesso para ${recipient}!`,
     };
   } catch (err: unknown) {
     console.error('Erro ao enviar e-mail:', err);
@@ -485,4 +597,3 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
     };
   }
 }
-

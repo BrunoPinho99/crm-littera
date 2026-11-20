@@ -1,10 +1,10 @@
 import nodemailer from 'nodemailer';
 
-export const GMAIL_USER = process.env.GMAIL_USER || 'bruno.pinho.brasilia@gmail.com';
+export const GMAIL_USER = process.env.GMAIL_USER || '';
 export const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
 export function getEmailTransporter() {
-  if (!GMAIL_APP_PASSWORD) {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     return null;
   }
 
@@ -23,6 +23,7 @@ export function generateLeadEmailContent(lead: {
 }) {
   const schoolName = lead.nome_escola;
   const recipientName = lead.nome_decisor?.trim() ? lead.nome_decisor : 'Equipe Pedagógica / Direção';
+  const senderEmailDisplay = GMAIL_USER || 'contato@littera.com.br';
 
   const subject = `Inovação Pedagógica & Gestão Digital: Apresentação para ${schoolName}`;
 
@@ -37,9 +38,8 @@ Gostaria de agendar uma breve conversa de 15 minutos esta semana para demonstrar
 Qual seria o melhor dia e horário para conversarmos?
 
 Atenciosamente,
-Bruno Pinho
-Littera Educacional
-bruno.pinho.brasilia@gmail.com | Brasília - DF`;
+Equipe Littera Educacional
+${senderEmailDisplay} | Brasília - DF`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6; max-width: 600px;">
@@ -55,9 +55,9 @@ bruno.pinho.brasilia@gmail.com | Brasília - DF`;
       <br />
       <hr style="border: 0; border-top: 1px solid #e2e8f0;" />
       <p style="margin-top: 16px; font-size: 14px; color: #475569;">
-        <strong>Bruno Pinho</strong><br />
-        <span style="color: #2563eb; font-weight: 600;">Littera Educacional</span><br />
-        <a href="mailto:${GMAIL_USER}" style="color: #64748b; text-decoration: none;">${GMAIL_USER}</a> | Brasília - DF
+        <strong>Littera Educacional</strong><br />
+        <span style="color: #2563eb; font-weight: 600;">Relacionamento Institucional</span><br />
+        <a href="mailto:${senderEmailDisplay}" style="color: #64748b; text-decoration: none;">${senderEmailDisplay}</a> | Brasília - DF
       </p>
     </div>
   `;

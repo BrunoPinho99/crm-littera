@@ -30,7 +30,14 @@ export default function LeadModal({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
+  const [prevTrack, setPrevTrack] = useState<{ lead?: LeadEscolar | null; mode: string; isOpen: boolean }>({
+    lead,
+    mode,
+    isOpen,
+  });
+
+  if (prevTrack.lead !== lead || prevTrack.mode !== mode || prevTrack.isOpen !== isOpen) {
+    setPrevTrack({ lead, mode, isOpen });
     if (lead && mode === 'edit') {
       setFormData({
         nome_escola: lead.nome_escola || '',
@@ -52,7 +59,7 @@ export default function LeadModal({
         status: 'novo',
       });
     }
-  }, [lead, mode, isOpen]);
+  }
 
   // Fechar com a tecla Escape
   useEffect(() => {

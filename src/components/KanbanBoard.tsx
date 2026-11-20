@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { LeadEscolar } from '@/types/database';
 import { 
-  Building2, 
   MapPin, 
   Mail, 
   Phone, 

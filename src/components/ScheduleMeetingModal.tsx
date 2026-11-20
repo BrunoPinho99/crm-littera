@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { LeadEscolar } from '@/types/database';
 import { buildGoogleCalendarUrl } from '@/lib/googleCalendar';
-import { X, Calendar, Clock, Video, Mail, User, Building2, Check, ExternalLink } from 'lucide-react';
+import { X, Calendar, Video, Mail, User, Building2, ExternalLink } from 'lucide-react';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
@@ -30,14 +30,19 @@ export default function ScheduleMeetingModal({
 
   const [meetingDate, setMeetingDate] = useState(getDefaultDateTime());
   const [duration, setDuration] = useState(30);
-  const [title, setTitle] = useState('');
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
+  const [prevLeadId, setPrevLeadId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  React.useEffect(() => {
-    if (lead) {
-      setTitle(`Demonstração Littera Platform • ${lead.nome_escola}`);
-    }
-  }, [lead]);
+  if (lead && lead.id !== prevLeadId) {
+    setPrevLeadId(lead.id);
+    setCustomTitle(`Demonstração Littera Platform • ${lead.nome_escola}`);
+  }
+
+  const title =
+    customTitle ??
+    (lead ? `Demonstração Littera Platform • ${lead.nome_escola}` : '');
+  const setTitle = setCustomTitle;
 
   if (!isOpen || !lead) return null;
 

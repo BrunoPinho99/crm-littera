@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Mail, CheckCircle, AlertCircle, Play, X, ShieldAlert, Sparkles, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle, Play, X, ShieldAlert, Sparkles, Loader2 } from 'lucide-react';
 
 interface AutoDispatcherModalProps {
   isOpen: boolean;
@@ -51,7 +51,7 @@ export default function AutoDispatcherModal({
                 Disparador Automático de E-mails
               </h2>
               <p className="text-xs text-slate-500 dark:text-neutral-400">
-                Disparo via bruno.pinho.brasilia@gmail.com
+                Disparo via e-mail configurado no servidor
               </p>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function AutoDispatcherModal({
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-[11px] text-slate-600 dark:text-neutral-400 space-y-1">
                 <p className="font-semibold text-slate-700 dark:text-neutral-300">Remetente:</p>
-                <p className="font-mono text-slate-800 dark:text-neutral-200">Bruno Pinho &lt;bruno.pinho.brasilia@gmail.com&gt;</p>
+                <p className="font-mono text-slate-800 dark:text-neutral-200">Littera Educacional &lt;Configurado via GMAIL_USER&gt;</p>
               </div>
             </div>
           ) : (

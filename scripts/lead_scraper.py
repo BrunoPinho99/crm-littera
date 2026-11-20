@@ -23,12 +23,12 @@ if os.path.exists(".env.local"):
                 os.environ.setdefault(k.strip(), v.strip())
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
 if not SUPABASE_URL:
-    SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "https://tzvjjomsubhacwiatrxk.supabase.co").rstrip("/")
-if not SUPABASE_KEY:
-    SUPABASE_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    raise ValueError("Variável de ambiente obrigatória não configurada: SUPABASE_URL")
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise ValueError("Variável de ambiente obrigatória não configurada: SUPABASE_SERVICE_ROLE_KEY")
 
 TARGET_COUNT = 80  # Meta diária: 80 empresas
 
@@ -78,23 +78,18 @@ def extract_bairro(addr: str) -> str:
     return 'Brasília'
 
 def infer_decisor_and_email(school_name: str, bairro: str):
+    """Infere apenas o cargo-alvo do decisor. NUNCA inventa e-mails (retornam None):
+    e-mails reais devem vir de OpenCNPJ, Apify ou cadastro manual."""
     norm = normalize_text(school_name)
-    slug = re.sub(r'[^a-z0-9]', '', norm)[:14]
-    
+
     if any(k in norm for k in ['infantil', 'baby', 'crianca', 'pequeno', 'creche', 'bercario']):
         decisor = "Diretoria Pedagógica (Educação Infantil)"
-        email_decisor = f"diretoria.{slug}@escola.df.gov.br"
-        email_geral = f"contato.{slug}@gmail.com"
     elif any(k in norm for k in ['vestibular', 'olimpico', 'aprovacao', 'curso', 'exito', 'alfa']):
         decisor = "Direção Geral & Coordenação"
-        email_decisor = f"diretor.{slug}@ensino.com.br"
-        email_geral = f"secretaria.{slug}@ensino.com.br"
     else:
         decisor = "Diretor(a) Pedagógico(a)"
-        email_decisor = f"diretoria.{slug}@educacao.df.br"
-        email_geral = f"contato.{slug}@educacao.df.br"
-        
-    return decisor, email_decisor, email_geral
+
+    return decisor, None, None
 
 def search_cnpj_by_name(name: str, city: str = "Brasília") -> str | None:
     """Procura automaticamente o CNPJ correspondente ao nome da escola no DF."""
@@ -277,8 +272,8 @@ def save_to_supabase(leads: list[dict]):
 
     endpoint = f"{SUPABASE_URL}/rest/v1/leads_escolares"
     headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=ignore-duplicates"
     }

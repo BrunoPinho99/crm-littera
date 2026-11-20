@@ -23,8 +23,13 @@ if os.path.exists(".env.local"):
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip())
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")).rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", ""))
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+if not SUPABASE_URL:
+    raise ValueError("Variável de ambiente obrigatória não configurada: SUPABASE_URL")
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise ValueError("Variável de ambiente obrigatória não configurada: SUPABASE_SERVICE_ROLE_KEY")
 
 def format_phone(ddd: str, phone: str) -> Optional[str]:
     if not phone:
@@ -110,14 +115,14 @@ def save_to_supabase(leads: List[Dict]):
         logging.info("Nenhum lead para salvar.")
         return
 
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        logging.error("Supabase URL ou Key não definidos.")
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logging.error("SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não definidos.")
         return
 
     endpoint = f"{SUPABASE_URL}/rest/v1/leads_escolares"
     headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "resolution=ignore-duplicates"
     }

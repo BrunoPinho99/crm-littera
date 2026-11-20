@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useTransition, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LeadEscolar } from '@/types/database';
-import { markContactSent, updateLeadStatus, createLead, updateLead, deleteLead, sendLeadEmailDirect } from '@/actions/leads';
+import { updateLeadStatus, createLead, updateLead, deleteLead, sendLeadEmailDirect } from '@/actions/leads';
 import MascotAgent, { MascotMode } from './MascotAgent';
 import Sidebar from './Sidebar';
 import KanbanBoard from './KanbanBoard';
@@ -11,6 +11,7 @@ import LeadModal from './LeadModal';
 import ScheduleMeetingModal from './ScheduleMeetingModal';
 import AutoDispatcherModal from './AutoDispatcherModal';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
+import { pickLeadEmail, isLandline } from '@/lib/contact';
 import {
   Search,
   Mail,
@@ -47,7 +48,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   const [onlyCurated, setOnlyCurated] = useState(false);
   const [agentMode, setAgentMode] = useState<MascotMode>('working');
   const [isCurating, setIsCurating] = useState(false);
-  const [isPending, startTransition] = useTransition();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Estados do Modal de CRUD
@@ -74,7 +74,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   // Regra de curadoria SDR: Decisor identificado E telefone/whatsapp + email
   const isHighPotentialLead = (lead: LeadEscolar) => {
     const hasDecisor = Boolean(lead.nome_decisor && lead.nome_decisor.trim().length > 0);
-    const hasContact = Boolean(lead.email_escola || lead.email_decisor) && Boolean(lead.telefone_escola);
+    const hasContact = Boolean(pickLeadEmail(lead)) && Boolean(lead.telefone_escola);
     return hasDecisor && hasContact;
   };
 
@@ -126,6 +126,8 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
 
       if (res.success && res.data) {
         setLeads((prev) => [res.data!, ...prev]);
+      } else {
+        alert(`Erro ao cadastrar: ${res.error}`);
       }
     } else if (modalMode === 'edit' && formData.id) {
       const res = await updateLead(formData.id, {
@@ -144,6 +146,8 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
             item.id === formData.id ? { ...item, ...formData } as LeadEscolar : item
           )
         );
+      } else {
+        alert(`Erro ao salvar alterações: ${res.error}`);
       }
     }
   };
@@ -156,6 +160,8 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     const res = await deleteLead(leadId);
     if (res.success) {
       setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    } else {
+      alert(`Erro ao excluir: ${res.error}`);
     }
     setUpdatingId(null);
   };
@@ -194,15 +200,16 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
 
     const res = await updateLeadStatus(leadId, newStatus);
     if (!res.success) {
-      console.error('Falha ao atualizar status no servidor');
+      console.error('Falha ao atualizar status no servidor:', res.error);
+      alert(`Não foi possível salvar o status: ${res.error}`);
     }
     setUpdatingId(null);
   };
 
   const handleSendEmail = async (lead: LeadEscolar) => {
-    const recipient = lead.email_decisor || lead.email_escola || '';
+    const recipient = pickLeadEmail(lead);
     if (!recipient) {
-      alert('Esta empresa não possui e-mail cadastrado.');
+      alert('Esta empresa não possui e-mail válido cadastrado. Clique em editar e informe o e-mail real.');
       return;
     }
 
@@ -218,9 +225,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
               : item
           )
         );
-        if (res.simulated) {
-          console.info(res.message);
-        }
+        if (res.message) console.info(res.message);
       } else {
         alert(`Erro ao enviar e-mail: ${res.error || 'Falha no disparo'}`);
       }
@@ -237,9 +242,22 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
       return;
     }
 
+    if (
+      isLandline(lead.telefone_escola) &&
+      !confirm(
+        `${lead.telefone_escola} parece ser um telefone fixo. O WhatsApp só abrirá a conversa se esse número tiver WhatsApp (Business). Abrir mesmo assim?`
+      )
+    ) {
+      return;
+    }
+
     const message = generateWhatsAppMessage(lead);
     const url = getWhatsAppUrl(lead.telefone_escola, message);
-    window.open(url, '_blank');
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      alert('O navegador bloqueou a nova aba. Permita pop-ups para este site e tente de novo.');
+      return;
+    }
 
     // Atualiza status do lead no CRM
     handleStatusChange(lead.id, 'contato_enviado');
@@ -248,7 +266,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   // Automação em Massa de Disparo de E-mails
   const handleOpenAutoDispatcher = () => {
     const eligibleLeads = leads.filter(
-      (l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))
+      (l) => l.status === 'novo' && Boolean(pickLeadEmail(l))
     );
     setDispatchProgress({
       current: 0,
@@ -263,7 +281,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
 
   const handleStartAutoDispatch = async () => {
     const eligibleLeads = leads.filter(
-      (l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))
+      (l) => l.status === 'novo' && Boolean(pickLeadEmail(l))
     );
 
     if (eligibleLeads.length === 0) return;
@@ -800,7 +818,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
         onClose={() => setIsAutoDispatcherOpen(false)}
         onConfirm={handleStartAutoDispatch}
         isRunning={isAutoDispatching}
-        totalPending={leads.filter((l) => l.status === 'novo' && (Boolean(l.email_decisor) || Boolean(l.email_escola))).length}
+        totalPending={leads.filter((l) => l.status === 'novo' && Boolean(pickLeadEmail(l))).length}
         progress={dispatchProgress}
       />
     </div>

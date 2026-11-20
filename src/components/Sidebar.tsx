@@ -10,9 +10,7 @@ import {
   Layers, 
   Clock,
   ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-  Award
+  ChevronRight
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,7 +19,7 @@ interface SidebarProps {
   agentMode: MascotMode;
   onToggleAgentMode: () => void;
   totalLeads: number;
-  curatedCount: number;
+  curatedCount?: number;
   onRunCurator?: () => void;
   isCurating?: boolean;
 }
@@ -32,9 +30,6 @@ export default function Sidebar({
   agentMode,
   onToggleAgentMode,
   totalLeads,
-  curatedCount,
-  onRunCurator,
-  isCurating = false,
 }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);

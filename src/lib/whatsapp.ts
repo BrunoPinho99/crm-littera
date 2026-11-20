@@ -39,5 +39,5 @@ export function generateWhatsAppMessage(lead: {
 export function getWhatsAppUrl(phone: string, message: string): string {
   const formattedPhone = formatWhatsAppNumber(phone);
   const encodedText = encodeURIComponent(message);
-  return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodedText}`;
+  return `https://wa.me/${formattedPhone}?text=${encodedText}`;
 }

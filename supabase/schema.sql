@@ -1,8 +1,43 @@
 -- ==============================================================================
--- Schema do CRM Littera: Tabela de Leads Escolares
+-- Schema Consolidado do CRM Littera
 -- ==============================================================================
 
--- 1. Criação da tabela
+-- 1. Tabela de Usuários Autorizados
+CREATE TABLE IF NOT EXISTS public.usuarios_autorizados (
+    email TEXT PRIMARY KEY,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Inserção de exemplo para o operador inicial (substitua pelo seu e-mail real)
+INSERT INTO public.usuarios_autorizados (email)
+VALUES ('SEU_EMAIL_AQUI')
+ON CONFLICT (email) DO NOTHING;
+
+-- RLS para usuarios_autorizados (somente leitura do próprio e-mail)
+ALTER TABLE public.usuarios_autorizados ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "usuarios_autorizados_select_proprio"
+    ON public.usuarios_autorizados
+    FOR SELECT
+    TO authenticated
+    USING (lower(email) = lower(auth.jwt() ->> 'email'));
+
+-- 2. Função SECURITY DEFINER para verificar se o usuário autenticado está autorizado
+CREATE OR REPLACE FUNCTION public.is_usuario_autorizado()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.usuarios_autorizados
+    WHERE lower(email) = lower(auth.jwt() ->> 'email')
+  );
+$$;
+
+-- 3. Tabela de Leads Escolares
 CREATE TABLE IF NOT EXISTS public.leads_escolares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -17,38 +52,40 @@ CREATE TABLE IF NOT EXISTS public.leads_escolares (
     ultima_interacao TIMESTAMPTZ
 );
 
--- 2. Índices para performance em buscas e filtros
+-- Índices de performance
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_status ON public.leads_escolares(status);
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_nome ON public.leads_escolares(nome_escola);
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_created_at ON public.leads_escolares(created_at DESC);
 
--- Opcional: Garante unicidade por nome e cidade para evitar duplicatas do scraper
+-- Unicidade por nome e cidade para evitar duplicatas de prospecção
 CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_escolares_unique_school 
     ON public.leads_escolares(lower(trim(nome_escola)), lower(trim(cidade)));
 
--- 3. Habilitação de RLS (Row Level Security)
+-- 4. Habilitação de RLS em leads_escolares
 ALTER TABLE public.leads_escolares ENABLE ROW LEVEL SECURITY;
 
--- 4. Políticas de Segurança (RLS)
-
--- Política de leitura (anon/authenticated podem ler leads no dashboard)
-CREATE POLICY "Permitir leitura para todos os usuários autenticados e anon"
+-- Políticas de RLS estritas: apenas usuários autenticados autorizados
+CREATE POLICY "leads_escolares_select"
     ON public.leads_escolares
     FOR SELECT
-    TO anon, authenticated
-    USING (true);
+    TO authenticated
+    USING (public.is_usuario_autorizado());
 
--- Política de atualização (para alterar status ao clicar em 'Enviar E-mail')
-CREATE POLICY "Permitir atualização para anon e authenticated"
-    ON public.leads_escolares
-    FOR UPDATE
-    TO anon, authenticated
-    USING (true)
-    WITH CHECK (true);
-
--- Política de inserção (usada pelo Agente/API ou Dashboard)
-CREATE POLICY "Permitir inserção via anon e authenticated"
+CREATE POLICY "leads_escolares_insert"
     ON public.leads_escolares
     FOR INSERT
-    TO anon, authenticated
-    WITH CHECK (true);
+    TO authenticated
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE POLICY "leads_escolares_update"
+    ON public.leads_escolares
+    FOR UPDATE
+    TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE POLICY "leads_escolares_delete"
+    ON public.leads_escolares
+    FOR DELETE
+    TO authenticated
+    USING (public.is_usuario_autorizado());

@@ -1,13 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
+/**
+ * Módulo de conexão com o Supabase.
+ *
+ * Para o cliente de usuário no navegador (Client Components):
+ *   import { createClient } from '@/lib/supabase/client';
+ *
+ * Para o cliente de usuário no servidor (Server Components e Server Actions com RLS):
+ *   import { createClient } from '@/lib/supabase/server';
+ *
+ * Para o cliente administrativo só de servidor (service_role, ignora RLS):
+ *   import { supabaseAdmin } from '@/lib/supabase/admin';
+ */
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  'https://tzvjjomsubhacwiatrxk.supabase.co';
-
-const supabaseAnonKey =
-  process.env.SUPABASE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR6dmpqb21zdWJoYWN3aWF0cnhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMjIzNDEsImV4cCI6MjA4NTc5ODM0MX0.ylFJOFhTk9GNoF8DSAtwIutpl-R3fz_Tv4WjVcjF9aA';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export { createClient as createBrowserSupabaseClient } from './supabase/client';
