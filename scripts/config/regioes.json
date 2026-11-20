@@ -1,0 +1,19 @@
+[
+  {
+    "uf": "DF",
+    "municipios": []
+  },
+  {
+    "uf": "GO",
+    "municipios": [
+      "Luziânia",
+      "Valparaíso de Goiás",
+      "Novo Gama",
+      "Formosa",
+      "Águas Lindas de Goiás",
+      "Cidade Ocidental",
+      "Planaltina",
+      "Santo Antônio do Descoberto"
+    ]
+  }
+]

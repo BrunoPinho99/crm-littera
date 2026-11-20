@@ -1,6 +1,6 @@
 # CRM Littera - Prospecção Escolar B2B
 
-Sistema de prospecção de escolas particulares e decisores (Ensino Médio e Educação Básica) em Brasília/DF com automação de ponta a ponta, autenticação segura via Magic Link e controle de acesso estrito com Supabase RLS.
+Sistema de prospecção de escolas particulares e decisores (Ensino Médio e Educação Básica) em Brasília/DF e Região Integrada de Desenvolvimento (RIDE - Entorno do DF) com automação de ponta a ponta, autenticação segura via Magic Link e controle de acesso estrito com Supabase RLS.
 
 ---
 
@@ -8,8 +8,46 @@ Sistema de prospecção de escolas particulares e decisores (Ensino Médio e Edu
 
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS v4, Lucide Icons.
 - **Autenticação & Segurança**: Supabase Auth (Magic Link por e-mail), `@supabase/ssr` com cookies de sessão, proxy Next.js (`src/proxy.ts`), controle de permissão por e-mail (`usuarios_autorizados`) e Row Level Security (RLS) estrito com função `SECURITY DEFINER`.
-- **Banco de Dados**: Supabase (PostgreSQL) com RLS ativado e sem permissões para o papel `anon`.
-- **Agente Diário SDR**: Script Python com enriquecimento e validação cadastral, orquestrado via GitHub Actions usando `SUPABASE_SERVICE_ROLE_KEY`.
+- **Banco de Dados**: Supabase (PostgreSQL) com RLS ativado e sem permissões para o papel `anon`. Tabelas: `escolas`, `contatos`, `interacoes`, `agente_execucoes`, `usuarios_autorizados`.
+- **Base do ICP (Censo Escolar INEP)**: Script Python de streaming e importação de microdados oficiais do Censo Escolar da Educação Básica (INEP/MEC) com filtros estritos de qualificação e porte.
+- **Agente Diário SDR**: Scripts Python de prospecção e enriquecimento cadastral, orquestrados via GitHub Actions com `SUPABASE_SERVICE_ROLE_KEY`.
+
+---
+
+## 🏫 Base do ICP: Censo Escolar (INEP)
+
+A base de escolas do CRM Littera é abastecida diretamente pelos **Microdados do Censo Escolar da Educação Básica do INEP** (ano mais recente: 2024). Essa é a única fonte primária oficial que identifica com precisão:
+1. Se a escola é privada (`TP_DEPENDENCIA = 4`).
+2. Se está em atividade (`TP_SITUACAO_FUNCIONAMENTO = 1`).
+3. Se oferece Ensino Médio regular (`IN_MED = 1` ou `QT_MAT_MED > 0`).
+4. O número real de alunos matriculados no Ensino Médio (`QT_MAT_MED`) e total (`QT_MAT_BAS`).
+5. O CNPJ oficial da escola e da sua mantenedora (com validação estrita de dígitos verificadores da Receita Federal).
+
+### 1. Execução Local
+
+```bash
+# Rodar teste simulado (não grava no Supabase e exibe distribuição por município)
+python scripts/importar_censo.py --ano 2024 --dry-run
+
+# Importação real para o banco Supabase
+python scripts/importar_censo.py --ano 2024
+
+# Usando arquivo CSV ou ZIP local já baixado
+python scripts/importar_censo.py --arquivo /caminho/para/microdados_ed_basica_2024.csv
+
+# Ajustando o porte mínimo de alunos no Ensino Médio (default: 40)
+python scripts/importar_censo.py --ano 2024 --min-matriculas 30
+```
+
+### 2. Execução via GitHub Actions
+
+O workflow `.github/workflows/importar_censo.yml` pode ser disparado manualmente através do botão **Run workflow** na aba Actions do GitHub, com suporte ao parâmetro de entrada `ano` (padrão: 2024).
+
+### 3. Customização de Regiões e Configurações
+
+- **`scripts/config/regioes.json`**: Define o Distrito Federal (todas as cidades) e a lista de municípios-alvo do estado de Goiás pertencentes ao Entorno do DF (ex: Águas Lindas de Goiás, Valparaíso de Goiás, Luziânia, Formosa, Novo Gama, Cidade Ocidental, Planaltina e Santo Antônio do Descoberto). Para expandir o território atendido, basta adicionar novos municípios ou estados nesta lista.
+- **`scripts/config/censo.json`**: Define a URL oficial do INEP para cada ano e o dicionário de mapeamento entre as colunas do Censo e os atributos das tabelas do CRM.
+- **Porte Mínimo (`MIN_MATRICULAS_EM`)**: Escolas com menos de 40 alunos no Ensino Médio são registradas com `status_qualificacao = 'descartado'` e o motivo correspondente anotado em `motivo_descarte`.
 
 ---
 
@@ -19,27 +57,14 @@ Sistema de prospecção de escolas particulares e decisores (Ensino Médio e Edu
 
 1. Acesse o painel do seu projeto no [Supabase](https://supabase.com).
 2. No menu lateral esquerdo, clique em **SQL Editor**.
-3. Abra ou cole o conteúdo do arquivo:
-   ```text
-   supabase/migrations/0001_seguranca.sql
-   ```
-4. **IMPORTANTE**: Antes de clicar em **Run**, localize a linha com:
-   ```sql
-   INSERT INTO public.usuarios_autorizados (email)
-   VALUES ('SEU_EMAIL_AQUI')
-   ON CONFLICT (email) DO NOTHING;
-   ```
-   Substitua `'SEU_EMAIL_AQUI'` pelo seu endereço de e-mail corporativo (o mesmo que usará para fazer login).
-5. Clique em **Run**. A migração:
-   - Cria a tabela `usuarios_autorizados` com RLS restrito.
-   - Cria a função `public.is_usuario_autorizado()` com `SECURITY DEFINER`.
-   - Remove as políticas públicas antigas de `leads_escolares`.
-   - Bloqueia totalmente o papel `anon` (sem acesso de leitura ou escrita).
-   - Libera SELECT, INSERT, UPDATE e DELETE em `leads_escolares` apenas para usuários autenticados cujo e-mail conste em `usuarios_autorizados`.
+3. Execute as migrações em ordem:
+   - `supabase/migrations/0001_seguranca.sql`
+   - `supabase/migrations/0002_schema_v2.sql`
+4. **IMPORTANTE**: Antes de aplicar a migração 0001, garanta que seu e-mail esteja na lista de administradores autorizados em `usuarios_autorizados`.
 
 ---
 
-## 🚀 Execução Local
+## 🚀 Execução Local da Aplicação Web
 
 ### 1. Variáveis de Ambiente
 
@@ -54,7 +79,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-ou-publishable
 SUPABASE_URL=https://seu-projeto.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role-secreta
 
-# Apify (opcional, para scrapers)
+# Apify (opcional)
 APIFY_TOKEN=seu_apify_token_aqui
 
 # Envio de E-mails via Gmail (Nodemailer SMTP)
@@ -89,11 +114,11 @@ Cadastre em **Project Settings > Environment Variables**:
 | `GMAIL_APP_PASSWORD` | Senha de aplicativo (16 dígitos) gerada na Conta Google |
 | `APIFY_TOKEN` | (Opcional) Token para serviços Apify |
 
-### 2. No GitHub Secrets (para o Workflow `leadbot.yml`)
+### 2. No GitHub Secrets (para os Workflows `importar_censo.yml` e `leadbot.yml`)
 
 Cadastre em **Settings > Secrets and variables > Actions**:
 
 | Nome do Secret | Descrição |
 |---|---|
 | `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta `service_role` (ignora RLS para o robô inserir leads) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta `service_role` (necessária para sincronização com o banco) |

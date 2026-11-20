@@ -1,0 +1,31 @@
+{
+  "ano_mais_recente": 2024,
+  "urls": {
+    "2024": "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2024.zip",
+    "2023": "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2023.zip",
+    "2022": "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_2022.zip"
+  },
+  "separador": ";",
+  "encoding": "latin-1",
+  "mapeamento_colunas": {
+    "CO_ENTIDADE": "codigo_inep",
+    "NO_ENTIDADE": "nome",
+    "TP_DEPENDENCIA": "tipo_dependencia (4=Privada)",
+    "TP_SITUACAO_FUNCIONAMENTO": "situacao_funcionamento (1=Em atividade)",
+    "SG_UF": "uf",
+    "NO_MUNICIPIO": "cidade",
+    "CO_MUNICIPIO": "score_detalhes.censo.co_municipio",
+    "NO_BAIRRO": "bairro",
+    "DS_ENDERECO": "endereco (logradouro)",
+    "NU_ENDERECO": "endereco (numero)",
+    "CO_CEP": "cep",
+    "NU_DDD": "telefone (ddd)",
+    "NU_TELEFONE": "telefone (numero)",
+    "IN_MED": "oferece_ensino_medio",
+    "QT_MAT_MED": "matriculas_em",
+    "QT_MAT_BAS": "matriculas_total",
+    "NU_CNPJ_ESCOLA_PRIVADA": "cnpj",
+    "NU_CNPJ_MANTENEDORA": "cnpj (fallback se escola vazia)",
+    "TP_CATEGORIA_ESCOLA_PRIVADA": "score_detalhes.censo.categoria_escola_privada"
+  }
+}

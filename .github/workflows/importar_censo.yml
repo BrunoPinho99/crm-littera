@@ -1,0 +1,41 @@
+name: Importar Censo Escolar INEP
+
+on:
+  workflow_dispatch:
+    inputs:
+      ano:
+        description: 'Ano do Censo Escolar a importar (deixe vazio para o mais recente)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  importar-censo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Executar Importação do Censo
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MIN_MATRICULAS_EM: '40'
+        run: |
+          if [ -n "${{ inputs.ano }}" ]; then
+            python scripts/importar_censo.py --ano "${{ inputs.ano }}"
+          else
+            python scripts/importar_censo.py
+          fi

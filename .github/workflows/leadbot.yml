@@ -1,13 +1,10 @@
 name: Agente Diário de Extração de Leads
 
 on:
-  schedule:
-    # Roda todos os dias às 08:00 UTC (05:00 no horário de Brasília)
-    - cron: '0 8 * * *'
-  workflow_dispatch: # Permite disparo manual pelo painel do GitHub Actions
+  workflow_dispatch: # Permite disparo manual pelo painel do GitHub Actions (será refeito na Etapa 8)
 
 jobs:
-  scrape-and-sync:
+  importar-censo-diario:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,9 +22,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Executar Agente Scraper de Escolas
+      - name: Executar Importador do Censo
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MIN_MATRICULAS_EM: '40'
         run: |
-          python scripts/lead_scraper.py
+          python scripts/importar_censo.py

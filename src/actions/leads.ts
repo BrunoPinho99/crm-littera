@@ -15,7 +15,6 @@ import {
 import { pickLeadEmail } from '@/lib/contact';
 import { 
   getEscolasComContatos, 
-  upsertEscolas, 
   createEscola, 
   updateEscola, 
   deleteEscola, 
@@ -515,51 +514,17 @@ export async function getLastAgentExecution(): Promise<AgenteExecucao | null> {
   }
 }
 
-export async function runAgentScout(count = 20): Promise<{
+export async function runAgentScout(_count = 20): Promise<{
   success: boolean;
   message?: string;
   count?: number;
   error?: string;
 }> {
+  void _count;
   await requireUser();
 
-  try {
-    // Prospecção de escolas usando upsert na tabela escolas com onConflict chave_dedup
-    const mockEscolas: Partial<Escola>[] = [];
-    const nomes = [
-      'Colégio Sigma Asa Sul',
-      'Colégio Marista João Paulo II',
-      'Colégio Leonardo da Vinci Taguatinga',
-      'Colégio Dromos Asa Norte',
-      'Colégio Olimpo Águas Claras',
-    ];
-
-    for (let i = 0; i < Math.min(count, nomes.length); i++) {
-      mockEscolas.push({
-        nome: nomes[i],
-        cidade: 'Brasília',
-        uf: 'DF',
-        status_funil: 'novo',
-        status_qualificacao: 'bruto',
-        fonte: 'scout_agente',
-      });
-    }
-
-    const res = await upsertEscolas(mockEscolas);
-    if (!res.success) {
-      return { success: false, error: res.error };
-    }
-
-    try { revalidatePath('/'); } catch {}
-    return {
-      success: true,
-      count: res.data?.length || mockEscolas.length,
-      message: `${res.data?.length || mockEscolas.length} escolas prospectadas com sucesso.`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Erro na execução do agente scout',
-    };
-  }
+  return {
+    success: false,
+    error: 'Agente em reconstrução: será ligado na Etapa 8',
+  };
 }
