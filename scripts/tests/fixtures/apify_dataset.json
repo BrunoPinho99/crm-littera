@@ -1,0 +1,56 @@
+[
+  {
+    "cnpj": "00000000000191",
+    "razaoSocial": "BANCO DO BRASIL SA",
+    "nomeFantasia": "DIRECAO GERAL",
+    "municipioNome": "Brasília",
+    "cep": "70073901",
+    "email": "contato@bb.com.br",
+    "telefone1": "(61) 3493-9002",
+    "telefone2": null,
+    "socios": [
+      {
+        "nome": "TARCISIO",
+        "qualificacaoDescricao": "Presidente"
+      }
+    ]
+  },
+  {
+    "cnpj": "33000167000101",
+    "razaoSocial": "CENTRO EDUCACIONAL HORIZONTE LTDA",
+    "nomeFantasia": "COLEGIO HORIZONTE",
+    "municipioNome": "Brasília",
+    "cep": "70830010",
+    "email": "secretaria@horizonte.edu.br",
+    "telefone1": "(61) 3322-1100",
+    "telefone2": null,
+    "socios": [
+      {
+        "nome": "ROBERTO",
+        "qualificacaoDescricao": "Diretor"
+      }
+    ]
+  },
+  {
+    "cnpj": "44555666000181",
+    "razaoSocial": "COLEGIO INTEGRADO UNIDADE 1 LTDA",
+    "nomeFantasia": "COLEGIO INTEGRADO",
+    "municipioNome": "Valparaíso de Goiás",
+    "cep": "72870000",
+    "email": "contato@integrado.com.br",
+    "telefone1": "(61) 3627-1010",
+    "telefone2": null,
+    "socios": []
+  },
+  {
+    "cnpj": "55666777000181",
+    "razaoSocial": "COLEGIO INTEGRADO UNIDADE 2 LTDA",
+    "nomeFantasia": "COLEGIO INTEGRADO",
+    "municipioNome": "Valparaíso de Goiás",
+    "cep": "72870100",
+    "email": "contato2@integrado.com.br",
+    "telefone1": "(61) 3627-2020",
+    "telefone2": null,
+    "socios": []
+  }
+]

@@ -205,3 +205,15 @@ CREATE POLICY "agente_execucoes_select"
     FOR SELECT
     TO authenticated
     USING (public.is_usuario_autorizado());
+
+-- 7. Tabela de Cache de Consultas CNPJ (Etapa 4)
+CREATE TABLE IF NOT EXISTS public.cache_cnpj (
+    cnpj TEXT PRIMARY KEY,
+    fonte TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    consultado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.cache_cnpj ENABLE ROW LEVEL SECURITY;
+-- Sem políticas para anon e authenticated: exclusivo para service_role (rotinas de enriquecimento)
+

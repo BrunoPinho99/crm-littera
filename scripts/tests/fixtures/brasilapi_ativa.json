@@ -1,0 +1,63 @@
+{
+  "cnpj": "00000000000191",
+  "identificador_matriz_filial": 1,
+  "descricao_identificador_matriz_filial": "MATRIZ",
+  "razao_social": "COLÉGIO EXCELÊNCIA DE BRASÍLIA LTDA",
+  "nome_fantasia": "COLÉGIO EXCELÊNCIA",
+  "situacao_cadastral": 2,
+  "descricao_situacao_cadastral": "ATIVA",
+  "data_situacao_cadastral": "2010-01-15",
+  "motivo_situacao_cadastral": 0,
+  "nome_cidade_no_exterior": null,
+  "codigo_pais": null,
+  "pais": null,
+  "data_inicio_atividade": "2010-01-15",
+  "cnae_fiscal": 8520100,
+  "cnae_fiscal_descricao": "Ensino médio",
+  "descricao_tipo_de_logradouro": "QUADRA",
+  "logradouro": "SGAN 910 MODULO B",
+  "numero": "S/N",
+  "complemento": "",
+  "bairro": "ASA NORTE",
+  "cep": "70790100",
+  "uf": "DF",
+  "codigo_municipio": 9701,
+  "municipio": "BRASILIA",
+  "ddd_telefone_1": "6132014000",
+  "ddd_telefone_2": "61999887766",
+  "ddd_fax": null,
+  "email": "SECRETARIA@COLEGIOEXCELENCIA.COM.BR",
+  "situacao_especial": null,
+  "data_situacao_especial": null,
+  "porte": "DEMAIS",
+  "codigo_porte": 5,
+  "natureza_juridica": "Sociedade Empresária Limitada",
+  "codigo_natureza_juridica": 2062,
+  "capital_social": 1500000,
+  "qsa": [
+    {
+      "identificador_de_socio": 2,
+      "nome_socio": "CARLOS EDUARDO DE ALMEIDA",
+      "cnpj_cpf_do_socio": "***123456**",
+      "codigo_qualificacao_socio": 49,
+      "qualificacao_socio": "Sócio-Administrador",
+      "data_entrada_sociedade": "2010-01-15"
+    },
+    {
+      "identificador_de_socio": 2,
+      "nome_socio": "BEATRIZ MENDONCA LIMA",
+      "cnpj_cpf_do_socio": "***789012**",
+      "codigo_qualificacao_socio": 10,
+      "qualificacao_socio": "Diretora",
+      "data_entrada_sociedade": "2015-06-20"
+    },
+    {
+      "identificador_de_socio": 1,
+      "nome_socio": "HOLDING EDUCACIONAL DO CENTRO OESTE S.A.",
+      "cnpj_cpf_do_socio": "12345678000199",
+      "codigo_qualificacao_socio": 22,
+      "qualificacao_socio": "Sócio de Responsabilidade Limitada",
+      "data_entrada_sociedade": "2020-03-10"
+    }
+  ]
+}

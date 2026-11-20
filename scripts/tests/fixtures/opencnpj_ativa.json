@@ -1,0 +1,25 @@
+{
+  "cnpj": "22333444000192",
+  "razaoSocial": "INSTITUTO EDUCACIONAL PROGRESSO LTDA",
+  "nomeFantasia": "COLEGIO PROGRESSO",
+  "situacaoCadastral": "Ativa",
+  "porte": "Empresa de Pequeno Porte",
+  "capitalSocial": 500000.0,
+  "telefone": "(61) 3344-9988",
+  "email": "diretoria@colegioprogresso.com.br",
+  "cnaes": [
+    {
+      "cnae": "8520100",
+      "descricao": "Ensino médio"
+    }
+  ],
+  "naturezaJuridica": "206-2 - Sociedade Empresária Limitada",
+  "socios": [
+    {
+      "nomeSocio": "FERNANDO HENRIQUE SOUZA",
+      "descricao": "Administrador",
+      "identificadorSocio": 2,
+      "cnpjCpfSocio": "***456789**"
+    }
+  ]
+}

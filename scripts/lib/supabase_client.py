@@ -5,7 +5,20 @@ import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+def load_env_local_if_needed():
+    if not os.getenv("SUPABASE_URL"):
+        from pathlib import Path
+        env_path = Path(__file__).resolve().parent.parent.parent / ".env.local"
+        if env_path.exists():
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ.setdefault(k.strip(), v.strip())
+
 def get_supabase_credentials():
+    load_env_local_if_needed()
     url = os.getenv("SUPABASE_URL", "").rstrip("/")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url:
