@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Mail, CheckCircle, Play, X, ShieldAlert, Sparkles, Loader2 } from 'lucide-react';
+import { Mail, CheckCircle, Play, X, Sparkles, Loader2 } from 'lucide-react';
 
 interface AutoDispatcherModalProps {
   isOpen: boolean;
@@ -15,7 +15,6 @@ interface AutoDispatcherModalProps {
     currentSchool: string;
     successCount: number;
     errorCount: number;
-    isSimulated: boolean;
   };
 }
 
@@ -138,18 +137,6 @@ export default function AutoDispatcherModal({
                   <p className="text-xl font-black text-rose-700 dark:text-rose-300 mt-0.5">{progress.errorCount}</p>
                 </div>
               </div>
-
-              {progress.isSimulated && !isRunning && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs">
-                  <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold">Modo de Teste/Simulação Ativo:</span>
-                    <p className="text-[11px] mt-0.5">
-                      Os leads foram atualizados no CRM. Para envio SMTP real através dos servidores do Google, lembre-se de configurar a <strong>Senha de App</strong> no arquivo <code>.env.local</code>.
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

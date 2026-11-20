@@ -15,7 +15,8 @@ import {
   Trash2,
   UserCheck,
   CheckCircle2,
-  MessageCircle
+  MessageCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
@@ -87,6 +88,7 @@ export default function KanbanBoard({
   onScheduleMeeting,
   updatingId,
 }: KanbanBoardProps) {
+  void onSendEmail;
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<LeadEscolar['status'] | null>(null);
 
@@ -182,9 +184,20 @@ export default function KanbanBoard({
                           <h4 className="font-bold text-sm text-slate-900 dark:text-neutral-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                             {lead.nome_escola}
                           </h4>
-                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-neutral-400">
-                            <MapPin className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
-                            <span>{lead.cidade}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-neutral-400">
+                              <MapPin className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
+                              <span>{lead.cidade}</span>
+                            </div>
+                            {lead.precisa_revisao && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                                title={lead.observacao_revisao || 'Lead precisa de revisão nos dados'}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                <span>Revisar</span>
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -281,12 +294,12 @@ export default function KanbanBoard({
                             )}
                             <button
                               type="button"
+                              disabled={true}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onSendEmail(lead);
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] transition cursor-pointer shadow-xs"
-                              title="Disparar e-mail automático via Gmail"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-neutral-800 text-slate-400 dark:text-neutral-500 font-semibold text-[11px] cursor-not-allowed opacity-60 shadow-xs"
+                              title="Será reativado na Etapa 10 com a sequência automática"
                             >
                               <Send className="w-3 h-3" />
                               <span>E-mail</span>

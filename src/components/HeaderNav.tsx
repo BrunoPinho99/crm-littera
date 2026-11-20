@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from './ThemeProvider';
 import { Sun, Moon, ShieldCheck, LogOut } from 'lucide-react';
+import HeaderAgentStatus from './HeaderAgentStatus';
 import { createClient as createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export default function HeaderNav() {
@@ -42,6 +43,9 @@ export default function HeaderNav() {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          {/* Status Real do Agente SDR */}
+          <HeaderAgentStatus />
+
           {/* Toggle Modo Claro / Escuro */}
           <button
             type="button"

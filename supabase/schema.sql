@@ -49,13 +49,16 @@ CREATE TABLE IF NOT EXISTS public.leads_escolares (
     email_decisor TEXT,
     status TEXT NOT NULL DEFAULT 'novo' 
         CHECK (status IN ('novo', 'contato_enviado', 'respondido', 'reuniao_agendada')),
-    ultima_interacao TIMESTAMPTZ
+    ultima_interacao TIMESTAMPTZ,
+    precisa_revisao BOOLEAN NOT NULL DEFAULT false,
+    observacao_revisao TEXT
 );
 
 -- Índices de performance
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_status ON public.leads_escolares(status);
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_nome ON public.leads_escolares(nome_escola);
 CREATE INDEX IF NOT EXISTS idx_leads_escolares_created_at ON public.leads_escolares(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_escolares_precisa_revisao ON public.leads_escolares(precisa_revisao);
 
 -- Unicidade por nome e cidade para evitar duplicatas de prospecção
 CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_escolares_unique_school 
@@ -87,5 +90,24 @@ CREATE POLICY "leads_escolares_update"
 CREATE POLICY "leads_escolares_delete"
     ON public.leads_escolares
     FOR DELETE
+    TO authenticated
+    USING (public.is_usuario_autorizado());
+
+-- 5. Tabela de Execuções Reais do Agente SDR
+CREATE TABLE IF NOT EXISTS public.agente_execucoes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    iniciado_em TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    finalizado_em TIMESTAMPTZ,
+    status TEXT NOT NULL CHECK (status IN ('rodando', 'sucesso', 'erro')),
+    leads_encontrados INT NOT NULL DEFAULT 0,
+    leads_inseridos INT NOT NULL DEFAULT 0,
+    mensagem TEXT
+);
+
+ALTER TABLE public.agente_execucoes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "agente_execucoes_select"
+    ON public.agente_execucoes
+    FOR SELECT
     TO authenticated
     USING (public.is_usuario_autorizado());

@@ -77,20 +77,6 @@ def extract_bairro(addr: str) -> str:
             return part.split('-')[-1].strip()
     return 'Brasília'
 
-def infer_decisor_and_email(school_name: str, bairro: str):
-    """Infere apenas o cargo-alvo do decisor. NUNCA inventa e-mails (retornam None):
-    e-mails reais devem vir de OpenCNPJ, Apify ou cadastro manual."""
-    norm = normalize_text(school_name)
-
-    if any(k in norm for k in ['infantil', 'baby', 'crianca', 'pequeno', 'creche', 'bercario']):
-        decisor = "Diretoria Pedagógica (Educação Infantil)"
-    elif any(k in norm for k in ['vestibular', 'olimpico', 'aprovacao', 'curso', 'exito', 'alfa']):
-        decisor = "Direção Geral & Coordenação"
-    else:
-        decisor = "Diretor(a) Pedagógico(a)"
-
-    return decisor, None, None
-
 def search_cnpj_by_name(name: str, city: str = "Brasília") -> str | None:
     """Procura automaticamente o CNPJ correspondente ao nome da escola no DF."""
     query = f"{name} {city} CNPJ"
@@ -229,7 +215,7 @@ def scrape_schools_df(target_count: int = TARGET_COUNT) -> list[dict]:
                     addr_m = re.search(r'<span>(.*?)</span>', inner)
                     addr = html.unescape(addr_m.group(1)).strip() if addr_m else 'Brasília, DF'
                     bairro = extract_bairro(addr)
-                    decisor, email_decisor, email_geral = infer_decisor_and_email(clean_name, bairro)
+                    decisor, email_decisor, email_geral = None, None, None
                     
                     candidates.append({
                         "nome_escola": clean_name,

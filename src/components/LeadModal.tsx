@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { LeadEscolar } from '@/types/database';
-import { X, Building2, User, Mail, Phone, MapPin, Tag } from 'lucide-react';
+import { X, Building2, User, Mail, Phone, MapPin, Tag, AlertTriangle } from 'lucide-react';
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -106,9 +106,20 @@ export default function LeadModal({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-neutral-100 text-base">
-                {mode === 'create' ? 'Adicionar Nova Empresa' : 'Editar Empresa / Lead'}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 dark:text-neutral-100 text-base">
+                  {mode === 'create' ? 'Adicionar Nova Empresa' : 'Editar Empresa / Lead'}
+                </h3>
+                {lead?.precisa_revisao && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                    title={lead.observacao_revisao || 'Revisar lead'}
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    <span>Revisar</span>
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500 dark:text-neutral-400">
                 Preencha os dados cadastrais e decisor de contato
               </p>
@@ -125,6 +136,21 @@ export default function LeadModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
+          {lead?.precisa_revisao && (
+            <div
+              className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300"
+              title={lead.observacao_revisao || 'Lead precisa de revisão manual'}
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Selo: Revisar</span>
+                <p className="text-[11px] mt-0.5 text-amber-700 dark:text-amber-400">
+                  {lead.observacao_revisao || 'Este lead possui dados cadastrais que foram marcados para revisão.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-1">
               Nome da Empresa / Escola *

@@ -6,7 +6,6 @@ import { updateLeadStatus, createLead, updateLead, deleteLead, sendLeadEmailDire
 import MascotAgent, { MascotMode } from './MascotAgent';
 import Sidebar from './Sidebar';
 import KanbanBoard from './KanbanBoard';
-import WordSwap from './WordSwap';
 import LeadModal from './LeadModal';
 import ScheduleMeetingModal from './ScheduleMeetingModal';
 import AutoDispatcherModal from './AutoDispatcherModal';
@@ -22,7 +21,6 @@ import {
   Calendar,
   MessageSquareCheck,
   Building2,
-  RefreshCw,
   Sparkles,
   LayoutGrid,
   Table as TableIcon,
@@ -31,7 +29,8 @@ import {
   Trash2,
   Award,
   MessageCircle,
-  Play
+  Play,
+  AlertTriangle
 } from 'lucide-react';
 
 interface CRMDashboardProps {
@@ -46,8 +45,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('todos');
   const [onlyCurated, setOnlyCurated] = useState(false);
-  const [agentMode, setAgentMode] = useState<MascotMode>('working');
-  const [isCurating, setIsCurating] = useState(false);
+  const [agentMode] = useState<MascotMode>('working');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Estados do Modal de CRUD
@@ -68,7 +66,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     currentSchool: '',
     successCount: 0,
     errorCount: 0,
-    isSimulated: false,
   });
 
   // Regra de curadoria SDR: Decisor identificado E telefone/whatsapp + email
@@ -274,7 +271,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
       currentSchool: '',
       successCount: 0,
       errorCount: 0,
-      isSimulated: false,
     });
     setIsAutoDispatcherOpen(true);
   };
@@ -289,7 +285,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     setIsAutoDispatching(true);
     let successCount = 0;
     let errorCount = 0;
-    let isSimulated = false;
 
     for (let i = 0; i < eligibleLeads.length; i++) {
       const currentLead = eligibleLeads[i];
@@ -303,7 +298,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
         const res = await sendLeadEmailDirect(currentLead.id);
         if (res.success) {
           successCount++;
-          if (res.simulated) isSimulated = true;
           setLeads((prev) =>
             prev.map((item) =>
               item.id === currentLead.id
@@ -323,7 +317,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
         ...prev,
         successCount,
         errorCount,
-        isSimulated,
       }));
 
       // Intervalo de segurança entre envios
@@ -333,14 +326,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     }
 
     setIsAutoDispatching(false);
-  };
-
-  const handleRunCurator = () => {
-    setIsCurating(true);
-    setTimeout(() => {
-      setOnlyCurated(true);
-      setIsCurating(false);
-    }, 700);
   };
 
   const renderBadge = (status: LeadEscolar['status']) => {
@@ -382,14 +367,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
       <Sidebar
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
-        agentMode={agentMode}
-        onToggleAgentMode={() =>
-          setAgentMode((prev) => (prev === 'working' ? 'idle' : 'working'))
-        }
         totalLeads={leads.length}
-        curatedCount={curatedCount}
-        onRunCurator={handleRunCurator}
-        isCurating={isCurating}
       />
 
       {/* ================= ÁREA DE CONTEÚDO PRINCIPAL (NÃO É EMPURRADA) ================= */}
@@ -404,19 +382,11 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5 animate-spin text-emerald-600 dark:text-emerald-400" style={{ animationDuration: '3s' }} />
-                      SDR Prospecção Ativa
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-blue-600 dark:text-blue-400" />
+                      SDR Prospecção
                     </span>
-                    <span className="text-xs text-slate-500 dark:text-neutral-400">Curadoria em tempo real (DF)</span>
-                  </div>
-                  {/* WORD SWAP ANIMADO */}
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-bold shrink-0">Etapa:</span>
-                    <WordSwap
-                      className="text-sm md:text-base font-semibold text-slate-800 dark:text-neutral-100"
-                      intervalMs={2600}
-                    />
+                    <span className="text-xs text-slate-500 dark:text-neutral-400">Escolas Particulares • Distrito Federal</span>
                   </div>
                 </div>
               </div>
@@ -459,13 +429,14 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
           </div>
 
           <div className="flex items-center gap-3 shrink-0 flex-wrap md:flex-nowrap">
-            {/* Botão de Disparo em Massa */}
+            {/* Botão de Disparo em Massa (Desativado até a Etapa 10) */}
             <button
+              disabled={true}
               onClick={handleOpenAutoDispatcher}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-500/20 transition cursor-pointer"
-              title="Iniciar envio de e-mails em lote para novos leads"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-neutral-800 text-slate-400 dark:text-neutral-500 cursor-not-allowed opacity-60 shadow-xs transition"
+              title="Será reativado na Etapa 10 com a sequência automática"
             >
-              <Play className="w-3.5 h-3.5 fill-white" />
+              <Play className="w-3.5 h-3.5 fill-current" />
               <span>Automação de E-mails</span>
             </button>
 
@@ -640,17 +611,25 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                     </tr>
                   ) : (
                     filteredLeads.map((lead) => {
-                      const isUpdating = updatingId === lead.id;
                       const isTier1 = isHighPotentialLead(lead);
 
                       return (
                         <tr key={lead.id} className="hover:bg-slate-50/70 dark:hover:bg-neutral-900/40 transition-colors group">
                           {/* Nome da Empresa */}
                           <td className="py-4 px-6">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 dark:text-neutral-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                 {lead.nome_escola}
                               </span>
+                              {lead.precisa_revisao && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0"
+                                  title={lead.observacao_revisao || 'Lead precisa de revisão nos dados'}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                  <span>Revisar</span>
+                                </span>
+                              )}
                               {isTier1 && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                   <Sparkles className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
@@ -751,18 +730,13 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                                 </button>
                               )}
 
-                              {/* Botão Enviar E-mail */}
+                              {/* Botão Enviar E-mail (Desativado até a Etapa 10) */}
                               <button
-                                onClick={() => handleSendEmail(lead)}
-                                disabled={isUpdating}
-                                className="p-2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
-                                title="Enviar E-mail automático via Gmail"
+                                disabled={true}
+                                className="p-2 rounded-xl text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-50 transition"
+                                title="Será reativado na Etapa 10 com a sequência automática"
                               >
-                                {isUpdating ? (
-                                  <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Mail className="w-4 h-4" />
-                                )}
+                                <Mail className="w-4 h-4" />
                               </button>
 
                               {/* Botão Editar */}

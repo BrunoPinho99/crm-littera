@@ -4,7 +4,7 @@ import { getEmailTransporter, generateLeadEmailContent, GMAIL_USER } from '@/lib
 import { revalidatePath } from 'next/cache';
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth';
-import { LeadEscolar } from '@/types/database';
+import { LeadEscolar, AgenteExecucao } from '@/types/database';
 import { pickLeadEmail } from '@/lib/contact';
 
 export async function getLeads(): Promise<LeadEscolar[]> {
@@ -292,23 +292,6 @@ function cleanSchoolName(raw: string): string {
   return formatted.join(' ');
 }
 
-// Importante: NÃO inventamos e-mails. As fontes públicas (qualotelefone) só trazem telefone,
-// então o e-mail fica vazio até ser cadastrado manualmente ou enriquecido via CNPJ/Apify.
-function inferDecisor(name: string): { decisor: string; email: string | null } {
-  const norm = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-  if (/infantil|baby|crianca|pequeno|creche|bercario/.test(norm)) {
-    return { decisor: 'Direção Pedagógica da Educação Infantil', email: null };
-  }
-  if (/vestibular|olimpico|aprovacao|curso|exito|alfa/.test(norm)) {
-    return { decisor: 'Direção / Coordenação do Pré-Vestibular', email: null };
-  }
-  return { decisor: 'Coordenação Pedagógica & Ensino Médio', email: null };
-}
-
 async function fetchPhone(detailUrl: string): Promise<string | null> {
   try {
     const detRes = await fetch(detailUrl, {
@@ -343,7 +326,7 @@ export async function runAgentScout(count: number = 20): Promise<{
       name: string;
       bairro: string;
       detailUrl: string;
-      decisor: string;
+      decisor: string | null;
       email: string | null;
     }> = [];
 
@@ -416,14 +399,12 @@ export async function runAgentScout(count: number = 20): Promise<{
           }
         }
 
-        const { decisor, email } = inferDecisor(cleanName);
-
         candidates.push({
           name: cleanName,
           bairro,
           detailUrl: href,
-          decisor,
-          email,
+          decisor: null,
+          email: null,
         });
 
         if (candidates.length >= count) break;
@@ -525,7 +506,6 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
   success: boolean;
   message?: string;
   error?: string;
-  simulated?: boolean;
 }> {
   await requireUser();
   const supabase = await createServerSupabaseClient();
@@ -559,7 +539,8 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
     if (!transporter) {
       return {
         success: false,
-        error: 'GMAIL_APP_PASSWORD não configurada — nenhum e-mail foi enviado.',
+        error:
+          'Envio de e-mail não configurado. Nenhum e-mail foi enviado e o status não foi alterado.',
       };
     }
 
@@ -586,7 +567,6 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
 
     return {
       success: true,
-      simulated: false,
       message: `E-mail enviado com sucesso para ${recipient}!`,
     };
   } catch (err: unknown) {
@@ -595,5 +575,29 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
       success: false,
       error: err instanceof Error ? err.message : 'Falha ao enviar e-mail via Gmail.',
     };
+  }
+}
+
+export async function getLastAgentExecution(): Promise<AgenteExecucao | null> {
+  await requireUser();
+  const supabase = await createServerSupabaseClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('agente_execucoes')
+      .select('*')
+      .order('iniciado_em', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Erro ao buscar última execução do agente:', error);
+      return null;
+    }
+
+    return (data as AgenteExecucao) || null;
+  } catch (err) {
+    console.error('Falha na requisição de agente_execucoes:', err);
+    return null;
   }
 }

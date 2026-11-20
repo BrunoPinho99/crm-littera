@@ -1,14 +1,9 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-// Padrão de e-mails INVENTADOS por versões antigas do agente (ex: secretaria.colegioema@educacao.df.br).
-// Esses endereços não existem de verdade e nunca devem ser usados em disparos.
-const FAKE_GENERATED_RE =
-  /^(secretaria|diretoria|diretor|contato)\.[a-z0-9]+@(educacao\.df\.br|escola\.df\.gov\.br|ensino\.com\.br|gmail\.com)$/i;
-
 export function isValidEmail(email?: string | null): boolean {
   if (!email) return false;
   const e = email.trim();
-  return EMAIL_RE.test(e) && !FAKE_GENERATED_RE.test(e);
+  return EMAIL_RE.test(e);
 }
 
 /** Retorna o melhor e-mail utilizável do lead (decisor primeiro, depois escola). */
