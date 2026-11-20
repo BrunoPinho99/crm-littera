@@ -159,6 +159,19 @@ export async function updateEscola(
   const supabase = await createServerSupabaseClient();
   const cleanData = sanitizeForUpsert(dados as Record<string, unknown>);
 
+  // Edição manual de e-mail geral reseta o status para 'nao_verificado'
+  if (dados.email_geral !== undefined && dados.email_geral_status === undefined) {
+    const { data: current } = await supabase
+      .from('escolas')
+      .select('email_geral')
+      .eq('id', id)
+      .single();
+    if (current && (current.email_geral || '').toLowerCase() !== (dados.email_geral || '').toLowerCase()) {
+      cleanData.email_geral_status = 'nao_verificado';
+      cleanData.email_geral_verificado_em = null;
+    }
+  }
+
   const { error } = await supabase
     .from('escolas')
     .update(cleanData)

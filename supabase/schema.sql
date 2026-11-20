@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS public.escolas (
     cep TEXT,
     telefone TEXT,
     email_geral TEXT,
+    email_geral_status TEXT NOT NULL DEFAULT 'nao_verificado'
+        CHECK (email_geral_status IN ('nao_verificado', 'valido', 'invalido', 'arriscado', 'catch_all', 'desconhecido')),
+    email_geral_verificado_em TIMESTAMPTZ,
     site TEXT,
     dominio TEXT,
     google_place_id TEXT,
@@ -243,5 +246,22 @@ CREATE POLICY "custos_agente_auth_policy"
     ON public.custos_agente FOR ALL TO authenticated
     USING (public.is_usuario_autorizado())
     WITH CHECK (public.is_usuario_autorizado());
+
+-- 9. Tabela de Cache de Verificações de E-mail (Etapa 6)
+CREATE TABLE IF NOT EXISTS public.verificacoes_email (
+    email TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('valido', 'invalido', 'arriscado', 'catch_all', 'desconhecido')),
+    sub_status TEXT,
+    provedor TEXT NOT NULL,
+    resposta JSONB,
+    verificado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.verificacoes_email ENABLE ROW LEVEL SECURITY;
+-- Sem políticas para anon e authenticated: exclusivo para service_role (cache de verificação)
+
+CREATE INDEX IF NOT EXISTS idx_verificacoes_email_verificado_em ON public.verificacoes_email (verificado_em);
+CREATE INDEX IF NOT EXISTS idx_escolas_email_geral_status ON public.escolas (email_geral_status);
+CREATE INDEX IF NOT EXISTS idx_contatos_email_status ON public.contatos (email_status);
 
 

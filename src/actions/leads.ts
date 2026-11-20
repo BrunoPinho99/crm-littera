@@ -10,7 +10,8 @@ import {
   Contato, 
   Interacao, 
   StatusFunil, 
-  AgenteExecucao 
+  AgenteExecucao,
+  EmailStatus
 } from '@/types/database';
 import { pickLeadEmail } from '@/lib/contact';
 import { 
@@ -528,3 +529,63 @@ export async function runAgentScout(_count = 20): Promise<{
     error: 'Agente em reconstrução: será ligado na Etapa 8',
   };
 }
+
+/**
+ * Server action para verificar um e-mail individualmente pela interface (modal).
+ * Protegida por requireUser(), aciona o mesmo provedor configurado no servidor.
+ */
+export async function verificarEmailAction(params: {
+  tipo: 'contato' | 'escola';
+  id: string;
+  email: string;
+}): Promise<{
+  success: boolean;
+  status?: EmailStatus;
+  sub_status?: string | null;
+  verificado_em?: string;
+  error?: string;
+}> {
+  await requireUser();
+
+  try {
+    if (!params.email || !params.email.trim()) {
+      return { success: false, error: 'E-mail não informado' };
+    }
+
+    const { verificarEmailComCache } = await import('@/lib/verificador-email');
+    const resultado = await verificarEmailComCache(params.email, true);
+    const verificadoEm = new Date().toISOString();
+
+    if (params.tipo === 'contato') {
+      await updateContato(params.id, {
+        email_status: resultado.status,
+        email_verificado_em: verificadoEm,
+      });
+    } else {
+      await updateEscola(params.id, {
+        email_geral_status: resultado.status,
+        email_geral_verificado_em: verificadoEm,
+      });
+    }
+
+    try {
+      revalidatePath('/');
+    } catch {
+      // Ignora fora de contexto HTTP
+    }
+
+    return {
+      success: true,
+      status: resultado.status,
+      sub_status: resultado.sub_status,
+      verificado_em: verificadoEm,
+    };
+  } catch (err) {
+    console.error('Erro na server action verificarEmailAction:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Erro ao verificar e-mail',
+    };
+  }
+}
+

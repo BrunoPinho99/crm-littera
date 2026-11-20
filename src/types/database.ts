@@ -61,6 +61,8 @@ export interface Escola {
   cep: string | null;
   telefone: string | null;
   email_geral: string | null;
+  email_geral_status?: EmailStatus;
+  email_geral_verificado_em?: string | null;
   site: string | null;
   dominio: string | null;
   google_place_id?: string | null;
@@ -143,6 +145,15 @@ export interface CustoAgente {
   unidades: number;
   custo_estimado_usd: number;
   criado_em: string;
+}
+
+export interface VerificacaoEmail {
+  email: string;
+  status: EmailStatus;
+  sub_status: string | null;
+  provedor: string;
+  resposta: Record<string, unknown> | null;
+  verificado_em: string;
 }
 
 /**

@@ -1,0 +1,47 @@
+name: Verificação de E-mails
+
+on:
+  workflow_dispatch:
+    inputs:
+      limite:
+        description: 'Limite máximo de e-mails a processar'
+        required: false
+        type: string
+        default: '200'
+      reverificar:
+        description: 'Forçar reverificação mesmo se verificado há menos de 90 dias (true/false)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  verificar-emails:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: Executar Verificação de E-mails
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EMAIL_VERIFIER: ${{ secrets.EMAIL_VERIFIER || 'zerobounce' }}
+          EMAIL_VERIFIER_API_KEY: ${{ secrets.EMAIL_VERIFIER_API_KEY }}
+        run: |
+          EXTRA_FLAGS=""
+          if [ "${{ inputs.reverificar }}" = "true" ]; then
+            EXTRA_FLAGS="--reverificar"
+          fi
+          python scripts/verificar_emails.py --limite "${{ inputs.limite }}" $EXTRA_FLAGS

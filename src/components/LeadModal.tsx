@@ -23,7 +23,8 @@ import {
 import { 
   addContatoAction, 
   deleteContatoAction, 
-  setContatoPrincipalAction 
+  setContatoPrincipalAction,
+  verificarEmailAction
 } from '@/actions/leads';
 
 interface LeadModalProps {
@@ -35,37 +36,95 @@ interface LeadModalProps {
   mode: 'create' | 'edit';
 }
 
-function EmailStatusBadge({ status }: { status: EmailStatus }) {
+function EmailStatusBadge({ 
+  status, 
+  verificadoEm,
+  onVerificar,
+  isVerificando
+}: { 
+  status?: EmailStatus; 
+  verificadoEm?: string | null;
+  onVerificar?: () => void;
+  isVerificando?: boolean;
+}) {
+  const dataFormatada = verificadoEm 
+    ? new Date(verificadoEm).toLocaleDateString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    : null;
+  const tooltipText = dataFormatada 
+    ? `Verificado em: ${dataFormatada}` 
+    : 'Não verificado';
+
+  let badgeContent = null;
   switch (status) {
     case 'valido':
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+      badgeContent = (
+        <span 
+          title={tooltipText}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 cursor-help"
+        >
           <ShieldCheck className="w-2.5 h-2.5" />
           Válido
         </span>
       );
-    case 'arriscado':
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
-          <ShieldAlert className="w-2.5 h-2.5" />
-          Arriscado
-        </span>
-      );
+      break;
     case 'invalido':
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300">
+      badgeContent = (
+        <span 
+          title={tooltipText}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200 dark:border-rose-800 cursor-help"
+        >
           <AlertTriangle className="w-2.5 h-2.5" />
           Inválido
         </span>
       );
+      break;
+    case 'arriscado':
+    case 'catch_all':
+      badgeContent = (
+        <span 
+          title={tooltipText}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 cursor-help"
+        >
+          <ShieldAlert className="w-2.5 h-2.5" />
+          {status === 'catch_all' ? 'Catch-all' : 'Arriscado'}
+        </span>
+      );
+      break;
     default:
-      return (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-neutral-400">
+      badgeContent = (
+        <span 
+          title={tooltipText}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700 cursor-help"
+        >
           <HelpCircle className="w-2.5 h-2.5" />
           Não verificado
         </span>
       );
+      break;
   }
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      {badgeContent}
+      {onVerificar && (
+        <button
+          type="button"
+          onClick={onVerificar}
+          disabled={isVerificando}
+          className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline px-1.5 py-0.5 rounded bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 disabled:opacity-50 cursor-pointer"
+          title="Verificar validade deste e-mail agora"
+        >
+          {isVerificando ? 'Verificando...' : 'Verificar agora'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function LeadModal({
@@ -106,6 +165,9 @@ export default function LeadModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'dados' | 'contatos'>('dados');
+  const [verificandoId, setVerificandoId] = useState<string | null>(null);
+  const [emailGeralStatus, setEmailGeralStatus] = useState<EmailStatus | undefined>(lead?.email_geral_status);
+  const [emailGeralVerificadoEm, setEmailGeralVerificadoEm] = useState<string | null | undefined>(lead?.email_geral_verificado_em);
 
   const [prevTrack, setPrevTrack] = useState<{ lead?: EscolaComContatos | null; mode: string; isOpen: boolean }>({
     lead,
@@ -115,6 +177,8 @@ export default function LeadModal({
 
   if (prevTrack.lead !== lead || prevTrack.mode !== mode || prevTrack.isOpen !== isOpen) {
     setPrevTrack({ lead, mode, isOpen });
+    setEmailGeralStatus(lead?.email_geral_status);
+    setEmailGeralVerificadoEm(lead?.email_geral_verificado_em);
     if (lead && mode === 'edit') {
       setFormData({
         nome: lead.nome || '',
@@ -162,6 +226,38 @@ export default function LeadModal({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleVerificarEmail = async (tipo: 'contato' | 'escola', id: string, email: string) => {
+    if (!email || !email.trim()) return;
+    setVerificandoId(id);
+    try {
+      const res = await verificarEmailAction({ tipo, id, email });
+      if (res.success && res.status) {
+        if (tipo === 'contato') {
+          setContatosList((prev) =>
+            prev.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    email_status: res.status!,
+                    email_verificado_em: res.verificado_em || new Date().toISOString(),
+                  }
+                : c
+            )
+          );
+        } else {
+          setEmailGeralStatus(res.status);
+          setEmailGeralVerificadoEm(res.verificado_em || new Date().toISOString());
+        }
+      } else {
+        alert(res.error || 'Erro ao verificar e-mail');
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao verificar e-mail');
+    } finally {
+      setVerificandoId(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -420,15 +516,29 @@ export default function LeadModal({
 
                 {/* E-mail Geral */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" />
-                    <span>E-mail Geral da Escola</span>
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-slate-400" />
+                      <span>E-mail Geral da Escola</span>
+                    </label>
+                    {lead?.id && formData.email_geral && (
+                      <EmailStatusBadge 
+                        status={emailGeralStatus || 'nao_verificado'} 
+                        verificadoEm={emailGeralVerificadoEm}
+                        onVerificar={() => handleVerificarEmail('escola', lead.id, formData.email_geral)}
+                        isVerificando={verificandoId === lead.id}
+                      />
+                    )}
+                  </div>
                   <input
                     type="email"
                     placeholder="Ex: secretaria@colegio.com.br"
                     value={formData.email_geral}
-                    onChange={(e) => setFormData({ ...formData, email_geral: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email_geral: e.target.value });
+                      setEmailGeralStatus('nao_verificado');
+                      setEmailGeralVerificadoEm(null);
+                    }}
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs text-slate-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
                   />
                 </div>
@@ -712,7 +822,12 @@ export default function LeadModal({
                             <div className="flex items-center gap-1.5 font-mono">
                               <Mail className="w-3 h-3 text-slate-400 shrink-0" />
                               <span>{contato.email}</span>
-                              <EmailStatusBadge status={contato.email_status} />
+                              <EmailStatusBadge 
+                                status={contato.email_status} 
+                                verificadoEm={contato.email_verificado_em}
+                                onVerificar={() => handleVerificarEmail('contato', contato.id, contato.email!)}
+                                isVerificando={verificandoId === contato.id}
+                              />
                             </div>
                           )}
                           {contato.telefone && (

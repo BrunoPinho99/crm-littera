@@ -58,6 +58,19 @@ export async function updateContato(
   const supabase = await createServerSupabaseClient();
   const cleanData = sanitizeForUpsert(dados as Record<string, unknown>);
 
+  // Edição manual de e-mail reseta o status para 'nao_verificado'
+  if (dados.email !== undefined && dados.email_status === undefined) {
+    const { data: current } = await supabase
+      .from('contatos')
+      .select('email')
+      .eq('id', id)
+      .single();
+    if (current && (current.email || '').toLowerCase() !== (dados.email || '').toLowerCase()) {
+      cleanData.email_status = 'nao_verificado';
+      cleanData.email_verificado_em = null;
+    }
+  }
+
   // Se estiver atualizando para principal, descobre a escola e desmarca os outros
   if (cleanData.principal === true) {
     const { data: current } = await supabase
