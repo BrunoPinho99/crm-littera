@@ -1,8 +1,14 @@
 import os
 import re
-import requests
+import sys
 import logging
+from pathlib import Path
 from typing import List, Dict
+import requests
+
+# Adiciona raiz do projeto ao path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.lib.supabase_client import upsert
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -112,9 +118,6 @@ def transform_to_crm_leads(items: List[Dict]) -> List[Dict]:
             elif isinstance(primeiro_socio, str):
                 nome_decisor = primeiro_socio
                 
-        if not nome_decisor:
-            nome_decisor = "Diretoria / Responsável"
-
         leads.append({
             "nome_escola": str(nome).strip().title(),
             "cidade": str(cidade).strip().title(),
@@ -131,35 +134,30 @@ def transform_to_crm_leads(items: List[Dict]) -> List[Dict]:
 def save_to_supabase(leads: List[Dict]):
     if not leads:
         logging.info("Nenhum lead processado para salvar.")
-        return
+        return {"inseridos": 0, "atualizados": 0, "falhas": 0}
 
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        logging.error("SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não definidos.")
-        return
+    escolas_to_upsert = []
+    for lead in leads:
+        cidade = lead.get("cidade") or "Brasília"
+        uf = "GO" if cidade in ("Luziânia", "Formosa", "Valparaíso de Goiás", "Novo Gama") else "DF"
+        escolas_to_upsert.append({
+            "nome": lead.get("nome_escola") or lead.get("nome"),
+            "cidade": cidade,
+            "uf": uf,
+            "telefone": lead.get("telefone_escola") or lead.get("telefone"),
+            "email_geral": lead.get("email_escola") or lead.get("email_geral"),
+            "fonte": "apify_cnpj",
+            "status_funil": "novo",
+            "status_qualificacao": "bruto",
+        })
 
-    endpoint = f"{SUPABASE_URL}/rest/v1/leads_escolares"
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=ignore-duplicates"
-    }
-
-    logging.info(f"Salvando {len(leads)} leads no Supabase...")
-    batch_size = 20
-    saved = 0
-    for i in range(0, len(leads), batch_size):
-        batch = leads[i:i + batch_size]
-        try:
-            res = requests.post(endpoint, headers=headers, json=batch, timeout=30)
-            if res.status_code in (200, 201):
-                saved += len(batch)
-            else:
-                logging.warning(f"Erro no lote {i}: {res.status_code} - {res.text}")
-        except Exception as ex:
-            logging.error(f"Exceção ao enviar lote: {ex}")
-
-    logging.info(f"Concluído! {saved} leads salvos no CRM.")
+    logging.info(f"Salvando {len(escolas_to_upsert)} escolas via lib.supabase_client...")
+    stats = upsert("escolas", escolas_to_upsert, on_conflict="chave_dedup")
+    logging.info(
+        f"Concluído! {stats['inseridos']} inseridos, "
+        f"{stats['atualizados']} atualizados, {stats['falhas']} falhas."
+    )
+    return stats
 
 if __name__ == "__main__":
     raw_data = fetch_apify_cnpj_leads(max_results=80)

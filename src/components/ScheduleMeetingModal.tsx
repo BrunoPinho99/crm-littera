@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LeadEscolar } from '@/types/database';
+import { EscolaComContatos } from '@/types/database';
 import { buildGoogleCalendarUrl } from '@/lib/googleCalendar';
 import { X, Calendar, Video, Mail, User, Building2, ExternalLink } from 'lucide-react';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  lead: LeadEscolar | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lead: EscolaComContatos | any | null;
   onConfirmScheduled: (leadId: string) => Promise<void>;
 }
 
@@ -23,7 +24,6 @@ export default function ScheduleMeetingModal({
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(14, 0, 0, 0);
-    // formato YYYY-MM-DDTHH:mm
     const tzOffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   };
@@ -34,29 +34,32 @@ export default function ScheduleMeetingModal({
   const [prevLeadId, setPrevLeadId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const schoolName = lead?.nome || lead?.nome_escola || '';
+  const contatos = lead?.contatos || [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const principal = contatos.find((c: any) => c.principal) || contatos[0];
+  const decisorName = principal?.nome || lead?.nome_decisor || 'Equipe Diretiva';
+  const attendeeEmail = principal?.email || lead?.email_decisor || lead?.email_geral || lead?.email_escola || '';
+  const phone = lead?.telefone || lead?.telefone_escola || 'Não informado';
+
   if (lead && lead.id !== prevLeadId) {
     setPrevLeadId(lead.id);
-    setCustomTitle(`Demonstração Littera Platform • ${lead.nome_escola}`);
+    setCustomTitle(`Demonstração Littera Platform • ${schoolName}`);
   }
 
-  const title =
-    customTitle ??
-    (lead ? `Demonstração Littera Platform • ${lead.nome_escola}` : '');
+  const title = customTitle ?? (lead ? `Demonstração Littera Platform • ${schoolName}` : '');
   const setTitle = setCustomTitle;
 
   if (!isOpen || !lead) return null;
-
-  const attendeeEmail = lead.email_decisor || lead.email_escola || '';
-  const decisorName = lead.nome_decisor || 'Equipe Diretiva';
 
   const handleOpenGoogleCalendar = async () => {
     setIsSubmitting(true);
     try {
       const description = 
-        `Reunião de Demonstração e Alinhamento Pedagógico com ${lead.nome_escola}.\n\n` +
+        `Reunião de Demonstração e Alinhamento Pedagógico com ${schoolName}.\n\n` +
         `Decisor: ${decisorName}\n` +
         `E-mail: ${attendeeEmail}\n` +
-        `Telefone/WhatsApp: ${lead.telefone_escola || 'Não informado'}\n` +
+        `Telefone/WhatsApp: ${phone}\n` +
         `Cidade: ${lead.cidade}\n\n` +
         `Pauta:\n` +
         `1. Apresentação das soluções tecnológicas Littera\n` +
@@ -64,18 +67,20 @@ export default function ScheduleMeetingModal({
         `3. Proposta de implementação piloto e condições comerciais.`;
 
       const gcalUrl = buildGoogleCalendarUrl({
-        title: title || `Reunião Littera • ${lead.nome_escola}`,
+        title: title || `Reunião Littera • ${schoolName}`,
         description,
         location: 'Google Meet (videoconferência)',
         startDateTime: meetingDate,
-        durationMinutes: Number(duration),
+        durationMinutes: duration,
         attendeesEmails: attendeeEmail ? [attendeeEmail] : [],
       });
 
-      // Abre nova aba diretamente no Google Calendar com todos os dados preenchidos
-      window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+      const win = window.open(gcalUrl, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        alert('O navegador bloqueou a abertura do Google Agenda. Permita pop-ups para este site.');
+        return;
+      }
 
-      // Atualiza o lead no CRM para 'reuniao_agendada'
       await onConfirmScheduled(lead.id);
       onClose();
     } finally {
@@ -84,117 +89,133 @@ export default function ScheduleMeetingModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#18181b] border border-slate-200 dark:border-neutral-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-[#18181b] border border-slate-200 dark:border-neutral-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-150"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-neutral-800 bg-amber-50/50 dark:bg-amber-950/20">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-900/40">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 dark:text-neutral-100 text-base">
-                Conectar ao Google Agenda
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-neutral-400">
-                Agendamento de Demonstração Comercial
+              <h2 className="text-base font-bold text-slate-900 dark:text-neutral-100">
+                Agendar Reunião no Google Agenda
+              </h2>
+              <p className="text-xs text-slate-400 dark:text-neutral-500">
+                Gera o convite com Google Meet e avança o status no CRM
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 dark:text-neutral-500 hover:text-slate-600 dark:hover:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-neutral-200 hover:bg-slate-100 dark:hover:bg-neutral-800 transition cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Informações do Lead */}
+        {/* Informações da Empresa & Participante */}
         <div className="p-6 space-y-4">
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-neutral-900/70 border border-slate-200 dark:border-neutral-800 text-xs space-y-1.5">
-            <div className="flex items-center gap-2 text-slate-800 dark:text-neutral-200 font-bold">
-              <Building2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>{lead.nome_escola}</span>
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-neutral-300">
+              <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="font-bold text-slate-900 dark:text-neutral-100">{schoolName}</span>
+              <span className="text-[10px] text-slate-400">({lead.cidade})</span>
             </div>
-            <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
-              <User className="w-3.5 h-3.5 text-slate-400" />
+
+            <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-neutral-400">
+              <User className="w-4 h-4 text-slate-400 shrink-0" />
               <span>{decisorName}</span>
             </div>
-            {attendeeEmail && (
-              <div className="flex items-center gap-2 text-slate-600 dark:text-neutral-400">
-                <Mail className="w-3.5 h-3.5 text-slate-400" />
-                <span className="truncate">{attendeeEmail}</span>
-              </div>
-            )}
+
+            <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-neutral-400">
+              <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+              {attendeeEmail ? (
+                <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400">{attendeeEmail}</span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 italic text-[11px]">
+                  Sem e-mail cadastrado (será necessário preencher no Google Agenda)
+                </span>
+              )}
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-1">
-              Título do Evento no Google Agenda
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-xs md:text-sm text-slate-800 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-1">
-                Data & Horário
+          {/* Campos de Data, Hora e Duração */}
+          <div className="space-y-3.5">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300">
+                Título do Evento
               </label>
               <input
-                type="datetime-local"
-                value={meetingDate}
-                onChange={(e) => setMeetingDate(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition cursor-pointer"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs text-slate-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-1">
-                Duração
-              </label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition cursor-pointer"
-              >
-                <option value={15}>15 minutos (Quick Call)</option>
-                <option value={30}>30 minutos (Demonstração)</option>
-                <option value={45}>45 minutos</option>
-                <option value={60}>1 hora (Apresentação Completa)</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Data e Hora de Início</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={meetingDate}
+                  onChange={(e) => setMeetingDate(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs text-slate-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300">
+                  Duração da Reunião
+                </label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs text-slate-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition cursor-pointer"
+                >
+                  <option value={15}>15 minutos</option>
+                  <option value={30}>30 minutos (Padrão)</option>
+                  <option value={45}>45 minutos</option>
+                  <option value={60}>1 hora</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300">
+              <Video className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <span>O Google Agenda incluirá automaticamente o link de videoconferência do Google Meet.</span>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-[11px] border border-blue-200/60 dark:border-blue-900/40">
-            <Video className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span>O Google Meet e o convite por e-mail para o decisor serão adicionados automaticamente.</span>
-          </div>
-
-          {/* Botões */}
-          <div className="pt-2 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenGoogleCalendar}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm shadow-amber-500/20 transition cursor-pointer disabled:opacity-50"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>{isSubmitting ? 'Abrindo...' : 'Agendar no Google Agenda'}</span>
-            </button>
-          </div>
+        {/* Rodapé com Ações */}
+        <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-900/40">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenGoogleCalendar}
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm shadow-amber-500/20 transition cursor-pointer disabled:opacity-50"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>{isSubmitting ? 'Abrindo...' : 'Abrir no Google Agenda'}</span>
+          </button>
         </div>
       </div>
     </div>

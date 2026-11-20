@@ -22,11 +22,18 @@ export function formatWhatsAppNumber(phone: string): string {
 }
 
 export function generateWhatsAppMessage(lead: {
-  nome_escola: string;
+  nome?: string;
+  nome_escola?: string;
   nome_decisor?: string | null;
+  contatos?: Array<{ nome?: string | null; principal?: boolean }>;
 }): string {
-  const recipientName = lead.nome_decisor?.trim() ? lead.nome_decisor : 'Equipe';
-  const schoolName = lead.nome_escola;
+  const principal = lead.contatos?.find((c) => c.principal);
+  const recipientName =
+    principal?.nome?.trim() ||
+    lead.nome_decisor?.trim() ||
+    'Equipe Diretiva';
+
+  const schoolName = lead.nome || lead.nome_escola || 'sua instituição';
 
   return (
     `Olá, ${recipientName}! Tudo bem? ` +

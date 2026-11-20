@@ -8,9 +8,14 @@ import re
 import sys
 import time
 import logging
+from pathlib import Path
 from typing import List, Dict, Optional
 import requests
 from opencnpj import OpenCNPJ
+
+# Adiciona raiz do projeto ao path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.lib.supabase_client import upsert
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -96,52 +101,45 @@ def fetch_lead_by_cnpj(client: OpenCNPJ, cnpj_raw: str) -> Optional[Dict]:
             else:
                 nome_decisor = socio_nome
 
-    if not nome_decisor:
-        nome_decisor = "Diretoria / Responsável"
+    cidade_clean = (data.municipio or "Brasília").strip().title()
+    uf_clean = (data.uf or "DF").strip().upper()
 
     return {
-        "nome_escola": nome.title(),
-        "cidade": cidade_display,
-        "telefone_escola": telefone_str,
-        "email_escola": email_escola,
-        "nome_decisor": nome_decisor,
-        "email_decisor": email_escola,
-        "status": "novo",
-        "ultima_interacao": None
+        "nome": nome.title(),
+        "cidade": cidade_clean,
+        "uf": uf_clean,
+        "telefone": telefone_str,
+        "email_geral": email_escola,
+        "cnpj": re.sub(r'\D', '', cnpj_raw),
+        "razao_social": data.razao_social or None,
+        "nome_fantasia": data.nome_fantasia or None,
+        "porte_receita": getattr(data, 'porte', None) or None,
+        "capital_social": getattr(data, 'capital_social', None) or None,
+        "situacao_cadastral": getattr(data, 'situacao_cadastral', None) or None,
+        "fonte": "opencnpj",
+        "status_funil": "novo",
+        "status_qualificacao": "enriquecido",
+        "_decisor_nome": nome_decisor,
+        "_decisor_email": email_escola,
     }
 
 def save_to_supabase(leads: List[Dict]):
     if not leads:
         logging.info("Nenhum lead para salvar.")
-        return
+        return {"inseridos": 0, "atualizados": 0, "falhas": 0}
 
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        logging.error("SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não definidos.")
-        return
+    escolas_to_upsert = []
+    for lead in leads:
+        escola_data = {k: v for k, v in lead.items() if not k.startswith("_")}
+        escolas_to_upsert.append(escola_data)
 
-    endpoint = f"{SUPABASE_URL}/rest/v1/leads_escolares"
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=ignore-duplicates"
-    }
-
-    logging.info(f"Salvando {len(leads)} leads no Supabase...")
-    batch_size = 20
-    saved = 0
-    for i in range(0, len(leads), batch_size):
-        batch = leads[i:i + batch_size]
-        try:
-            res = requests.post(endpoint, headers=headers, json=batch, timeout=30)
-            if res.status_code in (200, 201):
-                saved += len(batch)
-            else:
-                logging.warning(f"Erro no lote {i}: {res.status_code} - {res.text}")
-        except Exception as ex:
-            logging.error(f"Erro ao enviar lote para o Supabase: {ex}")
-
-    logging.info(f"Sucesso! {saved} leads salvos no CRM Littera.")
+    logging.info(f"Salvando {len(escolas_to_upsert)} escolas via lib.supabase_client...")
+    stats = upsert("escolas", escolas_to_upsert, on_conflict="chave_dedup")
+    logging.info(
+        f"Sucesso! {stats['inseridos']} inseridos, "
+        f"{stats['atualizados']} atualizados, {stats['falhas']} falhas no CRM Littera."
+    )
+    return stats
 
 def load_cnpjs_from_file_or_args() -> List[str]:
     # 1. Se passou um arquivo como argumento (ex: python script.py cnpjs.txt)

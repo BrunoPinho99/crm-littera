@@ -4,7 +4,12 @@ import json
 import logging
 import html
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor
+import sys
+from pathlib import Path
+
+# Adiciona raiz do projeto ao path para importar lib.supabase_client
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.lib.supabase_client import upsert
 from datetime import datetime, timezone
 import urllib.request
 import urllib.parse
@@ -254,31 +259,31 @@ def scrape_schools_df(target_count: int = TARGET_COUNT) -> list[dict]:
 def save_to_supabase(leads: list[dict]):
     if not leads:
         logging.info("Nenhum lead para salvar.")
-        return
+        return {"inseridos": 0, "atualizados": 0, "falhas": 0}
 
-    endpoint = f"{SUPABASE_URL}/rest/v1/leads_escolares"
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=ignore-duplicates"
-    }
+    # Transforma leads legados no formato da tabela escolas
+    escolas_to_upsert = []
+    for lead in leads:
+        cidade = lead.get("cidade") or "Brasília"
+        uf = "GO" if cidade in ("Luziânia", "Formosa", "Valparaíso de Goiás", "Novo Gama") else "DF"
+        escolas_to_upsert.append({
+            "nome": lead.get("nome_escola") or lead.get("nome"),
+            "cidade": cidade,
+            "uf": uf,
+            "telefone": lead.get("telefone_escola") or lead.get("telefone"),
+            "email_geral": lead.get("email_escola") or lead.get("email_geral"),
+            "fonte": "legado_qualotelefone",
+            "status_funil": "novo",
+            "status_qualificacao": "bruto",
+        })
 
-    logging.info(f"Inserindo {len(leads)} leads no Supabase...")
-    batch_size = 20
-    saved_count = 0
-    for i in range(0, len(leads), batch_size):
-        batch = leads[i:i + batch_size]
-        try:
-            resp = requests.post(endpoint, headers=headers, json=batch, timeout=30)
-            if resp.status_code in (200, 201):
-                saved_count += len(batch)
-            else:
-                logging.warning(f"Resposta {resp.status_code}: {resp.text}")
-        except Exception as ex:
-            logging.error(f"Erro no lote: {ex}")
-
-    logging.info(f"Entrega do Agente SDR concluída: {saved_count} empresas qualificadas salvas no CRM.")
+    logging.info(f"Executando upsert de {len(escolas_to_upsert)} escolas via lib.supabase_client...")
+    stats = upsert("escolas", escolas_to_upsert, on_conflict="chave_dedup")
+    logging.info(
+        f"Resultado do Upsert: {stats['inseridos']} inseridos, "
+        f"{stats['atualizados']} atualizados, {stats['falhas']} falhas."
+    )
+    return stats
 
 if __name__ == "__main__":
     leads = scrape_schools_df(target_count=TARGET_COUNT)

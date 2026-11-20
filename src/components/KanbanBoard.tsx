@@ -1,12 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LeadEscolar } from '@/types/database';
+import { EscolaComContatos, StatusFunil, EmailStatus } from '@/types/database';
 import { 
   MapPin, 
   Mail, 
   Phone, 
-  Clock, 
   Send, 
   Calendar, 
   MessageSquareCheck, 
@@ -14,25 +13,29 @@ import {
   Edit2,
   Trash2,
   UserCheck,
-  CheckCircle2,
   MessageCircle,
-  AlertTriangle
+  AlertTriangle,
+  Users,
+  ShieldCheck,
+  ShieldAlert,
+  HelpCircle,
+  ListOrdered
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
 interface KanbanBoardProps {
-  leads: LeadEscolar[];
-  onStatusChange: (leadId: string, newStatus: LeadEscolar['status']) => void;
-  onSendEmail: (lead: LeadEscolar) => void;
-  onSendWhatsApp?: (lead: LeadEscolar) => void;
-  onEditLead: (lead: LeadEscolar) => void;
+  leads: EscolaComContatos[];
+  onStatusChange: (leadId: string, newStatus: StatusFunil, oldStatus?: StatusFunil) => void;
+  onSendEmail: (lead: EscolaComContatos) => void;
+  onSendWhatsApp?: (lead: EscolaComContatos) => void;
+  onEditLead: (lead: EscolaComContatos) => void;
   onDeleteLead: (leadId: string) => void;
-  onScheduleMeeting?: (lead: LeadEscolar) => void;
+  onScheduleMeeting?: (lead: EscolaComContatos) => void;
   updatingId: string | null;
 }
 
 const COLUMNS: {
-  id: LeadEscolar['status'];
+  id: StatusFunil;
   title: string;
   badgeBg: string;
   badgeText: string;
@@ -42,12 +45,21 @@ const COLUMNS: {
 }[] = [
   {
     id: 'novo',
-    title: 'Novas Empresas (Curadas)',
+    title: 'Novo',
     badgeBg: 'bg-emerald-100 dark:bg-emerald-950/80',
     badgeText: 'text-emerald-800 dark:text-emerald-300',
     borderClass: 'border-emerald-200 dark:border-emerald-800/60',
     headerBg: 'bg-emerald-50/50 dark:bg-emerald-950/30',
     icon: <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />,
+  },
+  {
+    id: 'em_sequencia',
+    title: 'Em sequência',
+    badgeBg: 'bg-sky-100 dark:bg-sky-950/80',
+    badgeText: 'text-sky-800 dark:text-sky-300',
+    borderClass: 'border-sky-200 dark:border-sky-800/60',
+    headerBg: 'bg-sky-50/50 dark:bg-sky-950/30',
+    icon: <ListOrdered className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />,
   },
   {
     id: 'contato_enviado',
@@ -78,6 +90,45 @@ const COLUMNS: {
   },
 ];
 
+function EmailStatusBadge({ status }: { status: EmailStatus }) {
+  switch (status) {
+    case 'valido':
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800" title="E-mail verificado e válido">
+          <ShieldCheck className="w-2.5 h-2.5" />
+          Válido
+        </span>
+      );
+    case 'arriscado':
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800" title="E-mail arriscado">
+          <ShieldAlert className="w-2.5 h-2.5" />
+          Arriscado
+        </span>
+      );
+    case 'invalido':
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800" title="E-mail inválido / bounce">
+          <AlertTriangle className="w-2.5 h-2.5" />
+          Inválido
+        </span>
+      );
+    case 'catch_all':
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800" title="Domínio aceita catch-all">
+          Catch-all
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700" title="E-mail não verificado">
+          <HelpCircle className="w-2.5 h-2.5" />
+          Não verificado
+        </span>
+      );
+  }
+}
+
 export default function KanbanBoard({
   leads,
   onStatusChange,
@@ -90,264 +141,276 @@ export default function KanbanBoard({
 }: KanbanBoardProps) {
   void onSendEmail;
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
-  const [dragOverColumn, setDragOverColumn] = useState<LeadEscolar['status'] | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<StatusFunil | null>(null);
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     e.dataTransfer.setData('text/plain', leadId);
     setDraggedLeadId(leadId);
   };
 
-  const handleDragOver = (e: React.DragEvent, colId: LeadEscolar['status']) => {
+  const handleDragOver = (e: React.DragEvent, columnId: StatusFunil) => {
     e.preventDefault();
-    if (dragOverColumn !== colId) {
-      setDragOverColumn(colId);
+    if (dragOverColumn !== columnId) {
+      setDragOverColumn(columnId);
     }
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDragLeave = () => {
     setDragOverColumn(null);
   };
 
-  const handleDrop = (e: React.DragEvent, targetStatus: LeadEscolar['status']) => {
+  const handleDrop = (e: React.DragEvent, targetStatus: StatusFunil) => {
     e.preventDefault();
+    const leadId = e.dataTransfer.getData('text/plain');
     setDragOverColumn(null);
-    const leadId = e.dataTransfer.getData('text/plain') || draggedLeadId;
+    setDraggedLeadId(null);
+
     if (leadId) {
-      const lead = leads.find((l) => l.id === leadId);
-      if (lead && lead.status !== targetStatus) {
-        onStatusChange(leadId, targetStatus);
+      const currentLead = leads.find((l) => l.id === leadId);
+      if (currentLead && currentLead.status_funil !== targetStatus) {
+        onStatusChange(leadId, targetStatus, currentLead.status_funil);
       }
     }
-    setDraggedLeadId(null);
   };
 
   return (
-    <div className="w-full overflow-x-auto pb-4 pt-1">
-      <div className="flex gap-4 items-start min-w-max">
-        {COLUMNS.map((col) => {
-          const columnLeads = leads.filter((l) => l.status === col.id);
-          const isHovered = dragOverColumn === col.id;
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 h-full min-h-[650px] pb-6">
+      {COLUMNS.map((column) => {
+        const columnLeads = leads.filter((l) => l.status_funil === column.id);
+        const isTarget = dragOverColumn === column.id;
 
-          return (
-            <div
-              key={col.id}
-              onDragOver={(e) => handleDragOver(e, col.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, col.id)}
-              className={`flex flex-col w-[320px] sm:w-[340px] shrink-0 min-h-[580px] rounded-2xl border transition-all duration-200 bg-white dark:bg-[#121215] shadow-xs ${
-                isHovered
-                  ? `${col.borderClass} ring-2 ring-blue-500/30 scale-[1.01] bg-slate-50/50 dark:bg-neutral-900/50`
-                  : 'border-slate-200/90 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700'
-              }`}
-            >
-            {/* Cabeçalho da Coluna */}
-            <div className={`p-4 border-b border-slate-100 dark:border-neutral-800/80 flex items-center justify-between rounded-t-2xl ${col.headerBg}`}>
+        return (
+          <div
+            key={column.id}
+            onDragOver={(e) => handleDragOver(e, column.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, column.id)}
+            className={`flex flex-col rounded-2xl bg-slate-50/70 dark:bg-neutral-900/40 border transition-all duration-200 overflow-hidden ${
+              isTarget
+                ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 dark:bg-blue-950/20'
+                : 'border-slate-200/80 dark:border-neutral-800'
+            }`}
+          >
+            {/* Header da Coluna */}
+            <div className={`p-3.5 border-b border-slate-200/60 dark:border-neutral-800 flex items-center justify-between ${column.headerBg}`}>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-white dark:bg-neutral-900 shadow-xs border border-slate-200/60 dark:border-neutral-700">
-                  {col.icon}
+                <div className="p-1 rounded-md bg-white dark:bg-neutral-900 shadow-2xs">
+                  {column.icon}
                 </div>
-                <h3 className="font-bold text-xs text-slate-800 dark:text-neutral-100 tracking-tight">
-                  {col.title}
+                <h3 className="text-xs font-bold text-slate-800 dark:text-neutral-200">
+                  {column.title}
                 </h3>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${col.badgeBg} ${col.badgeText}`}>
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${column.badgeBg} ${column.badgeText}`}>
                 {columnLeads.length}
               </span>
             </div>
 
-            {/* Lista de Cards */}
-            <div className="p-3 space-y-3 flex-1 overflow-y-auto max-h-[calc(100vh-280px)]">
+            {/* Lista de Cards com Scroll Interno */}
+            <div className="flex-1 p-2.5 overflow-y-auto space-y-2.5 min-h-[150px]">
               {columnLeads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 border border-dashed border-slate-200 dark:border-neutral-800 rounded-xl text-center px-4">
-                  <p className="text-xs text-slate-400 dark:text-neutral-500">Nenhum lead nesta etapa</p>
-                  <p className="text-[10px] text-slate-400 dark:text-neutral-600 mt-0.5">Arraste um card aqui para mover</p>
+                <div className="h-28 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-neutral-800/80 rounded-xl text-center p-3 text-slate-400 dark:text-neutral-500">
+                  <p className="text-xs font-medium">Nenhuma empresa</p>
+                  <p className="text-[10px] mt-0.5">Arraste para cá</p>
                 </div>
               ) : (
                 columnLeads.map((lead) => {
                   const isUpdating = updatingId === lead.id;
                   const isBeingDragged = draggedLeadId === lead.id;
+                  const contatos = lead.contatos || [];
+                  const contatoPrincipal = contatos.find((c) => c.principal) || contatos[0];
+                  const outrosContatosCount = contatos.length > 1 ? contatos.length - 1 : 0;
 
                   return (
                     <div
                       key={lead.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, lead.id)}
-                      onDragEnd={() => setDraggedLeadId(null)}
-                      className={`group relative p-4 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-[#18181b] hover:border-blue-300 dark:hover:border-neutral-600 hover:shadow-md transition-all duration-200 cursor-grab active:cursor-grabbing ${
-                        isBeingDragged ? 'opacity-40 scale-95 border-blue-400' : ''
+                      className={`group relative bg-white dark:bg-[#121215] border border-slate-200/80 dark:border-neutral-800 p-3.5 rounded-xl shadow-xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
+                        isBeingDragged ? 'opacity-40 scale-95' : 'opacity-100'
                       } ${isUpdating ? 'animate-pulse pointer-events-none' : ''}`}
                     >
-                      {/* Topo do Card */}
+                      {/* Topo do Card: Nome e Selos */}
                       <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5 min-w-0">
-                          <h4 className="font-bold text-sm text-slate-900 dark:text-neutral-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
-                            {lead.nome_escola}
-                          </h4>
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-neutral-400">
-                              <MapPin className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
-                              <span>{lead.cidade}</span>
-                            </div>
+                            <h4 
+                              onClick={() => onEditLead(lead)}
+                              className="text-xs font-bold text-slate-900 dark:text-neutral-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer truncate transition-colors"
+                              title={lead.nome}
+                            >
+                              {lead.nome}
+                            </h4>
                             {lead.precisa_revisao && (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                              <span 
+                                className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0"
                                 title={lead.observacao_revisao || 'Lead precisa de revisão nos dados'}
                               >
-                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                <span>Revisar</span>
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                Revisar
                               </span>
                             )}
                           </div>
+                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-neutral-400 mt-1">
+                            <MapPin className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
+                            <span className="truncate">{lead.cidade}/{lead.uf}</span>
+                            {lead.bairro && <span className="truncate">• {lead.bairro}</span>}
+                          </div>
                         </div>
 
-                        {/* Botões de Ação CRUD (Editar e Deletar) */}
-                        <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition shrink-0">
+                        {/* Ações Rápidas no Hover */}
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditLead(lead);
-                            }}
-                            className="p-1 rounded-md text-slate-400 dark:text-neutral-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition cursor-pointer"
-                            title="Editar empresa"
+                            onClick={() => onEditLead(lead)}
+                            className="p-1 rounded text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition"
+                            title="Editar empresa e contatos"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3 h-3" />
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteLead(lead.id);
+                            onClick={() => {
+                              if (confirm(`Tem certeza que deseja excluir "${lead.nome}"?`)) {
+                                onDeleteLead(lead.id);
+                              }
                             }}
-                            className="p-1 rounded-md text-slate-400 dark:text-neutral-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                            title="Excluir empresa"
+                            className="p-1 rounded text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-neutral-800 transition"
+                            title="Excluir"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
 
-                      {/* Decisor & Contato */}
-                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800 space-y-1.5 text-xs">
-                        {lead.nome_decisor ? (
-                          <div className="flex items-center gap-1.5 text-slate-700 dark:text-neutral-200">
-                            <UserCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                            <span className="font-semibold truncate">{lead.nome_decisor}</span>
+                      {/* Bloco de Decisor / Contato Principal */}
+                      <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 space-y-1.5 text-[11px]">
+                        {contatoPrincipal ? (
+                          <div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-semibold text-slate-800 dark:text-neutral-200 truncate flex items-center gap-1">
+                                <UserCheck className="w-3 h-3 text-blue-500 shrink-0" />
+                                {contatoPrincipal.nome || 'Decisor sem nome'}
+                              </span>
+                              {contatoPrincipal.cargo && (
+                                <span className="text-[10px] text-slate-400 dark:text-neutral-500 truncate">
+                                  {contatoPrincipal.cargo}
+                                </span>
+                              )}
+                            </div>
+                            {contatoPrincipal.email && (
+                              <div className="flex items-center justify-between gap-1 mt-1 text-[10px]">
+                                <span className="text-slate-500 dark:text-neutral-400 truncate font-mono">
+                                  {contatoPrincipal.email}
+                                </span>
+                                <EmailStatusBadge status={contatoPrincipal.email_status} />
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <div className="text-[11px] text-slate-400 dark:text-neutral-500 italic">Decisor a identificar</div>
+                          <div className="text-[10px] text-slate-400 dark:text-neutral-500 italic flex items-center gap-1">
+                            <span>Nenhum decisor cadastrado</span>
+                          </div>
                         )}
 
-                        <div className="flex flex-col gap-1 text-[11px] text-slate-500 dark:text-neutral-400">
-                          {(lead.email_decisor || lead.email_escola) && (
-                            <div className="flex items-center gap-1.5 truncate">
-                              <Mail className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
-                              <span className="truncate">{lead.email_decisor || lead.email_escola}</span>
-                            </div>
-                          )}
-                          {lead.telefone_escola && (
-                            <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-neutral-300">
-                              <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                              <span>{lead.telefone_escola}</span>
-                            </div>
-                          )}
-                        </div>
+                        {/* Contador de outros contatos */}
+                        {outrosContatosCount > 0 && (
+                          <div className="flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 pt-0.5">
+                            <Users className="w-2.5 h-2.5" />
+                            <span>+{outrosContatosCount} outro{outrosContatosCount > 1 ? 's' : ''} contato{outrosContatosCount > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+
+                        {/* Telefone */}
+                        {lead.telefone && (
+                          <div className="flex items-center gap-1.5 text-slate-500 dark:text-neutral-400 pt-0.5">
+                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{lead.telefone}</span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Rodapé do Card */}
-                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800 flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-1 text-slate-400 dark:text-neutral-500">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {lead.ultima_interacao
-                              ? new Date(lead.ultima_interacao).toLocaleDateString('pt-BR', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                })
-                              : 'Sem contato'}
-                          </span>
-                        </div>
+                      {/* Rodapé do Card: Ações de Contato e Avanço de Status */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1">
+                          {/* Botão de Envio de E-mail (Desativado até a Etapa 10) */}
+                          <button
+                            type="button"
+                            disabled={true}
+                            className="p-1.5 rounded-lg border border-slate-200/60 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-60"
+                            title="Será reativado na Etapa 10 com a sequência automática"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
 
-                        {/* Ações rápidas de avanço */}
-                        {lead.status === 'novo' ? (
-                          <div className="flex items-center gap-1.5">
-                            {lead.telefone_escola && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (onSendWhatsApp) {
-                                    onSendWhatsApp(lead);
-                                  } else {
-                                    const msg = generateWhatsAppMessage(lead);
-                                    window.open(getWhatsAppUrl(lead.telefone_escola!, msg), '_blank');
-                                    onStatusChange(lead.id, 'contato_enviado');
-                                  }
-                                }}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition cursor-pointer shadow-xs"
-                                title="Enviar mensagem personalizada no WhatsApp"
-                              >
-                                <MessageCircle className="w-3 h-3" />
-                                <span>Zap</span>
-                              </button>
-                            )}
+                          {/* Botão de WhatsApp Web (Ativo) */}
+                          {lead.telefone && (
                             <button
                               type="button"
-                              disabled={true}
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
+                                if (onSendWhatsApp) {
+                                  onSendWhatsApp(lead);
+                                } else {
+                                  const message = generateWhatsAppMessage(lead);
+                                  const url = getWhatsAppUrl(lead.telefone!, message);
+                                  window.open(url, '_blank', 'noopener,noreferrer');
+                                }
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-neutral-800 text-slate-400 dark:text-neutral-500 font-semibold text-[11px] cursor-not-allowed opacity-60 shadow-xs"
-                              title="Será reativado na Etapa 10 com a sequência automática"
+                              className="p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer"
+                              title="Abrir WhatsApp Web"
                             >
-                              <Send className="w-3 h-3" />
-                              <span>E-mail</span>
+                              <MessageCircle className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        ) : lead.status === 'contato_enviado' ? (
+                          )}
+
+                          {/* Botão de Agendar Reunião */}
+                          {onScheduleMeeting && (
+                            <button
+                              type="button"
+                              onClick={() => onScheduleMeeting(lead)}
+                              className="p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer"
+                              title="Agendar Reunião no Google Agenda"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Botão Rápido de Avançar Etapa */}
+                        {column.id === 'novo' && (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onStatusChange(lead.id, 'respondido');
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-semibold text-[11px] transition cursor-pointer"
+                            onClick={() => onStatusChange(lead.id, 'em_sequencia', 'novo')}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold bg-sky-600 hover:bg-sky-700 text-white transition cursor-pointer"
                           >
-                            <MessageSquareCheck className="w-3 h-3" />
-                            <span>Respondeu</span>
+                            Sequência →
                           </button>
-                        ) : lead.status === 'respondido' ? (
+                        )}
+                        {column.id === 'em_sequencia' && (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onScheduleMeeting) {
-                                onScheduleMeeting(lead);
-                              } else {
-                                onStatusChange(lead.id, 'reuniao_agendada');
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-semibold text-[11px] transition cursor-pointer"
-                            title="Agendar no Google Agenda com Meet e convite"
+                            onClick={() => onStatusChange(lead.id, 'contato_enviado', 'em_sequencia')}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer"
                           >
-                            <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                            <span>Agendar Meet</span>
+                            Enviado →
                           </button>
-                        ) : (
+                        )}
+                        {column.id === 'contato_enviado' && (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onScheduleMeeting) {
-                                onScheduleMeeting(lead);
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-bold text-[11px] cursor-pointer"
-                            title="Ver ou Reagendar no Google Agenda"
+                            onClick={() => onStatusChange(lead.id, 'respondido', 'contato_enviado')}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white transition cursor-pointer"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Agendado</span>
+                            Respondeu →
+                          </button>
+                        )}
+                        {column.id === 'respondido' && onScheduleMeeting && (
+                          <button
+                            type="button"
+                            onClick={() => onScheduleMeeting(lead)}
+                            className="px-2 py-1 rounded-md text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white transition cursor-pointer"
+                          >
+                            Agendar
                           </button>
                         )}
                       </div>
@@ -359,7 +422,6 @@ export default function KanbanBoard({
           </div>
         );
       })}
-      </div>
     </div>
   );
 }

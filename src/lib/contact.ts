@@ -6,13 +6,32 @@ export function isValidEmail(email?: string | null): boolean {
   return EMAIL_RE.test(e);
 }
 
-/** Retorna o melhor e-mail utilizável do lead (decisor primeiro, depois escola). */
-export function pickLeadEmail(lead: {
+/**
+ * Retorna o melhor e-mail utilizável (contato principal primeiro, depois outros contatos, depois email_geral).
+ */
+export function pickLeadEmail(item?: {
   email_decisor?: string | null;
   email_escola?: string | null;
-}): string | null {
-  if (isValidEmail(lead.email_decisor)) return lead.email_decisor!.trim();
-  if (isValidEmail(lead.email_escola)) return lead.email_escola!.trim();
+  email_geral?: string | null;
+  contatos?: Array<{ email?: string | null; principal?: boolean }>;
+} | null): string | null {
+  if (!item) return null;
+
+  // 1. Contato principal
+  const principal = item.contatos?.find((c) => c.principal);
+  if (principal && isValidEmail(principal.email)) return principal.email!.trim();
+
+  // 2. Qualquer contato com e-mail
+  const anyContact = item.contatos?.find((c) => isValidEmail(c.email));
+  if (anyContact && isValidEmail(anyContact.email)) return anyContact.email!.trim();
+
+  // 3. Legado email_decisor
+  if (isValidEmail(item.email_decisor)) return item.email_decisor!.trim();
+
+  // 4. E-mail geral da escola
+  if (isValidEmail(item.email_geral)) return item.email_geral!.trim();
+  if (isValidEmail(item.email_escola)) return item.email_escola!.trim();
+
   return null;
 }
 
