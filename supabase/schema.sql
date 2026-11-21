@@ -264,4 +264,49 @@ CREATE INDEX IF NOT EXISTS idx_verificacoes_email_verificado_em ON public.verifi
 CREATE INDEX IF NOT EXISTS idx_escolas_email_geral_status ON public.escolas (email_geral_status);
 CREATE INDEX IF NOT EXISTS idx_contatos_email_status ON public.contatos (email_status);
 
+-- 10. Configuração de Score e Qualificação Automática (Etapa 7)
+CREATE TABLE IF NOT EXISTS public.config_score (
+    chave TEXT PRIMARY KEY,
+    valor NUMERIC,
+    valor_texto TEXT,
+    descricao TEXT
+);
+
+ALTER TABLE public.config_score ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "config_score_select_policy" ON public.config_score;
+CREATE POLICY "config_score_select_policy"
+    ON public.config_score FOR SELECT
+    TO authenticated
+    USING (public.is_usuario_autorizado());
+
+DROP POLICY IF EXISTS "config_score_update_policy" ON public.config_score;
+CREATE POLICY "config_score_update_policy"
+    ON public.config_score FOR ALL
+    TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE TABLE IF NOT EXISTS public.config_envio (
+    chave TEXT PRIMARY KEY,
+    valor_bool BOOLEAN NOT NULL DEFAULT false,
+    descricao TEXT
+);
+
+ALTER TABLE public.config_envio ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "config_envio_select_policy" ON public.config_envio;
+CREATE POLICY "config_envio_select_policy"
+    ON public.config_envio FOR SELECT
+    TO authenticated
+    USING (public.is_usuario_autorizado());
+
+DROP POLICY IF EXISTS "config_envio_all_policy" ON public.config_envio;
+CREATE POLICY "config_envio_all_policy"
+    ON public.config_envio FOR ALL
+    TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+
 

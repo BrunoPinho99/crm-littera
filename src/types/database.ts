@@ -156,6 +156,27 @@ export interface VerificacaoEmail {
   verificado_em: string;
 }
 
+export interface ConfigScore {
+  chave: string;
+  valor: number | null;
+  valor_texto: string | null;
+  descricao: string | null;
+}
+
+export interface ScoreCriterio {
+  criterio: string;
+  pontos: number;
+  motivo: string;
+}
+
+export interface ScoreDetalhes {
+  total: number;
+  minimo_qualificacao: number;
+  tem_email_liberado: boolean;
+  calculado_em: string;
+  criterios: ScoreCriterio[];
+}
+
 /**
  * Interface legada para compatibilidade de tipos transitórios
  */

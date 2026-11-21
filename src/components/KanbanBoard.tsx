@@ -19,9 +19,28 @@ import {
   ShieldCheck,
   ShieldAlert,
   HelpCircle,
-  ListOrdered
+  ListOrdered,
+  Award
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
+
+function getScoreBadgeClass(score: number | null | undefined): string {
+  const val = score ?? 0;
+  if (val >= 60) {
+    return 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+  }
+  if (val >= 30) {
+    return 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+  }
+  return 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border-slate-200 dark:border-neutral-700';
+}
+
+function getScoreBarClass(score: number | null | undefined): string {
+  const val = score ?? 0;
+  if (val >= 60) return 'bg-emerald-500';
+  if (val >= 30) return 'bg-amber-500';
+  return 'bg-slate-400 dark:bg-neutral-600';
+}
 
 interface KanbanBoardProps {
   leads: EscolaComContatos[];
@@ -32,6 +51,7 @@ interface KanbanBoardProps {
   onDeleteLead: (leadId: string) => void;
   onScheduleMeeting?: (lead: EscolaComContatos) => void;
   updatingId: string | null;
+  sortMode?: 'score_desc' | 'criado_em_desc';
 }
 
 const COLUMNS: {
@@ -138,6 +158,7 @@ export default function KanbanBoard({
   onDeleteLead,
   onScheduleMeeting,
   updatingId,
+  sortMode = 'score_desc',
 }: KanbanBoardProps) {
   void onSendEmail;
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -176,7 +197,17 @@ export default function KanbanBoard({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 h-full min-h-[650px] pb-6">
       {COLUMNS.map((column) => {
-        const columnLeads = leads.filter((l) => l.status_funil === column.id);
+        const columnLeads = leads
+          .filter((l) => l.status_funil === column.id)
+          .sort((a, b) => {
+            if (sortMode === 'criado_em_desc') {
+              return new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime();
+            }
+            const scoreA = a.score ?? -1;
+            const scoreB = b.score ?? -1;
+            if (scoreB !== scoreA) return scoreB - scoreA;
+            return new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime();
+          });
         const isTarget = dragOverColumn === column.id;
 
         return (
@@ -255,6 +286,31 @@ export default function KanbanBoard({
                             <MapPin className="w-3 h-3 text-slate-400 dark:text-neutral-500 shrink-0" />
                             <span className="truncate">{lead.cidade}/{lead.uf}</span>
                             {lead.bairro && <span className="truncate">• {lead.bairro}</span>}
+                          </div>
+
+                          {/* Badge de Score e Barra de Progresso sutil */}
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-bold border ${getScoreBadgeClass(lead.score)}`}>
+                                <Award className="w-2.5 h-2.5" />
+                                {lead.score ?? 0} pts
+                              </span>
+                              {lead.status_qualificacao === 'qualificado' ? (
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                  Qualificado
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 dark:text-neutral-500 text-[9px] capitalize">
+                                  {lead.status_qualificacao || 'bruto'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-neutral-800 h-1 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${getScoreBarClass(lead.score)}`}
+                                style={{ width: `${Math.min(100, Math.max(0, lead.score ?? 0))}%` }}
+                              />
+                            </div>
                           </div>
                         </div>
 

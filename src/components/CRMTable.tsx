@@ -82,6 +82,24 @@ function EmailStatusBadge({ status }: { status: EmailStatus }) {
   }
 }
 
+export function getScoreBadgeClass(score: number | null | undefined): string {
+  const val = score ?? 0;
+  if (val >= 60) {
+    return 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+  }
+  if (val >= 30) {
+    return 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+  }
+  return 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border-slate-200 dark:border-neutral-700';
+}
+
+export function getScoreBarClass(score: number | null | undefined): string {
+  const val = score ?? 0;
+  if (val >= 60) return 'bg-emerald-500';
+  if (val >= 30) return 'bg-amber-500';
+  return 'bg-slate-400 dark:bg-neutral-600';
+}
+
 export default function CRMTable({ initialLeads }: CRMDashboardProps) {
   const [leads, setLeads] = useState<EscolaComContatos[]>(initialLeads);
   const [currentTab, setCurrentTab] = useState<'leads' | 'kanban'>('kanban');
@@ -111,20 +129,17 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
     errorCount: 0,
   });
 
-  // Regra de curadoria SDR: Decisor identificado E telefone/whatsapp + email
-  const isHighPotentialLead = (lead: EscolaComContatos) => {
-    const hasDecisor = Boolean(lead.contatos && lead.contatos.length > 0);
-    const hasContact = Boolean(pickLeadEmail(lead)) && Boolean(lead.telefone);
-    return hasDecisor && hasContact;
-  };
-
+  // Curadoria SDR baseada em score e qualificação real no banco
   const curatedCount = useMemo(() => {
-    return leads.filter(isHighPotentialLead).length;
+    return leads.filter((l) => l.status_qualificacao === 'qualificado').length;
   }, [leads]);
+
+  // Modo de ordenação: maior score primeiro (padrão) ou data mais recente
+  const [sortMode, setSortMode] = useState<'score_desc' | 'criado_em_desc'>('score_desc');
 
   // Filtros em tempo real
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    const list = leads.filter((lead) => {
       const contatos = lead.contatos || [];
       const matchContatos = contatos.some(
         (c) =>
@@ -141,11 +156,21 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
       const matchesStatus =
         statusFilter === 'todos' ? true : lead.status_funil === statusFilter;
 
-      const matchesCurated = onlyCurated ? isHighPotentialLead(lead) : true;
+      const matchesCurated = onlyCurated ? lead.status_qualificacao === 'qualificado' : true;
 
       return matchesSearch && matchesStatus && matchesCurated;
     });
-  }, [leads, searchTerm, statusFilter, onlyCurated]);
+
+    return list.sort((a, b) => {
+      if (sortMode === 'score_desc') {
+        const scoreA = a.score ?? -1;
+        const scoreB = b.score ?? -1;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime();
+      }
+      return new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime();
+    });
+  }, [leads, searchTerm, statusFilter, onlyCurated, sortMode]);
 
   // Contadores para métricas
   const counts = useMemo(() => {
@@ -480,7 +505,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                   }`}
                 >
                   <Award className={`w-3.5 h-3.5 ${onlyCurated ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
-                  <span>{onlyCurated ? 'Mostrando Melhores Leads' : 'Ver Só Melhores Leads'}</span>
+                  <span>{onlyCurated ? 'Mostrando Melhores Leads (Qualificados)' : 'Ver Só Melhores Leads'}</span>
                   <span className={`px-1.5 py-0.2 rounded text-[10px] ${onlyCurated ? 'bg-emerald-800 text-white' : 'bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300'}`}>
                     {curatedCount}
                   </span>
@@ -598,10 +623,50 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
           </div>
         </div>
 
+        {/* BARRA DE FILTROS E ORDENAÇÃO (Compartilhada entre Kanban e Tabela) */}
+        <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-3.5 rounded-2xl shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por escola, decisor, cidade ou e-mail..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-900 dark:text-neutral-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
+              className="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+            >
+              <option value="todos">Todos os Status</option>
+              <option value="novo">Novo</option>
+              <option value="em_sequencia">Em sequência</option>
+              <option value="contato_enviado">Contato Enviado</option>
+              <option value="respondido">Respondido</option>
+              <option value="reuniao_agendada">Reunião Agendada</option>
+            </select>
+
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as 'score_desc' | 'criado_em_desc')}
+              className="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+              title="Modo de ordenação"
+            >
+              <option value="score_desc">Maior Score primeiro</option>
+              <option value="criado_em_desc">Data mais recente</option>
+            </select>
+          </div>
+        </div>
+
         {/* VISUALIZAÇÃO KANBAN OU TABELA */}
         {currentTab === 'kanban' ? (
           <KanbanBoard
-            leads={leads}
+            leads={filteredLeads}
+            sortMode={sortMode}
             onStatusChange={handleStatusChange}
             onSendEmail={handleSendEmail}
             onSendWhatsApp={handleSendWhatsApp}
@@ -613,35 +678,6 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
         ) : (
           /* TABELA LISTING */
           <div className="space-y-4">
-            {/* BARRA DE FILTROS */}
-            <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-3.5 rounded-2xl shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Buscar por escola, decisor, cidade ou e-mail..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-900 dark:text-neutral-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
-                  className="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
-                >
-                  <option value="todos">Todos os Status</option>
-                  <option value="novo">Novo</option>
-                  <option value="em_sequencia">Em sequência</option>
-                  <option value="contato_enviado">Contato Enviado</option>
-                  <option value="respondido">Respondido</option>
-                  <option value="reuniao_agendada">Reunião Agendada</option>
-                </select>
-              </div>
-            </div>
-
             {/* TABELA DE DADOS */}
             <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 rounded-2xl shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
@@ -649,6 +685,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                   <thead>
                     <tr className="border-b border-slate-200/80 dark:border-neutral-800 text-slate-400 dark:text-neutral-500 uppercase tracking-wider text-[10px] bg-slate-50/50 dark:bg-neutral-900/50">
                       <th className="py-4 px-6 font-semibold">Instituição de Ensino</th>
+                      <th className="py-4 px-6 font-semibold">Score</th>
                       <th className="py-4 px-6 font-semibold">Contato Geral</th>
                       <th className="py-4 px-6 font-semibold">Decisor Principal</th>
                       <th className="py-4 px-6 font-semibold">Status Funil</th>
@@ -658,7 +695,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                   <tbody className="divide-y divide-slate-100 dark:divide-neutral-800/80 text-slate-700 dark:text-neutral-300">
                     {filteredLeads.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-16 text-center text-slate-400 dark:text-neutral-600">
+                        <td colSpan={6} className="py-16 text-center text-slate-400 dark:text-neutral-600">
                           <Building2 className="w-10 h-10 mx-auto mb-3 opacity-30 stroke-[1.5]" />
                           <p className="text-base font-semibold text-slate-600 dark:text-neutral-400">Nenhuma escola encontrada</p>
                           <p className="text-xs text-slate-400 mt-1">Ajuste os filtros ou adicione uma nova escola.</p>
@@ -666,7 +703,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                       </tr>
                     ) : (
                       filteredLeads.map((lead) => {
-                        const isTier1 = isHighPotentialLead(lead);
+                        const isQualificado = lead.status_qualificacao === 'qualificado';
                         const contatos = lead.contatos || [];
                         const contatoPrincipal = contatos.find((c) => c.principal) || contatos[0];
                         const outrosContatosCount = contatos.length > 1 ? contatos.length - 1 : 0;
@@ -688,10 +725,10 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                                     <span>Revisar</span>
                                   </span>
                                 )}
-                                {isTier1 && (
+                                {isQualificado && (
                                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                                     <Sparkles className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                                    Top Tier
+                                    Qualificado
                                   </span>
                                 )}
                               </div>
@@ -699,6 +736,24 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
                                 <span>{lead.cidade}/{lead.uf}</span>
                                 {lead.bairro && <span>• {lead.bairro}</span>}
+                              </div>
+                            </td>
+
+                            {/* Score */}
+                            <td className="py-4 px-6">
+                              <div className="flex flex-col gap-1.5 w-28">
+                                <div className="flex items-center justify-between">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold border ${getScoreBadgeClass(lead.score)}`}>
+                                    <Award className="w-3 h-3" />
+                                    {lead.score ?? 0} pts
+                                  </span>
+                                </div>
+                                <div className="w-full bg-slate-100 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${getScoreBarClass(lead.score)}`}
+                                    style={{ width: `${Math.min(100, Math.max(0, lead.score ?? 0))}%` }}
+                                  />
+                                </div>
                               </div>
                             </td>
 

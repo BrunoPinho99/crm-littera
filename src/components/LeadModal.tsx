@@ -18,7 +18,11 @@ import {
   ShieldCheck,
   ShieldAlert,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  Award,
+  Sliders,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { 
   addContatoAction, 
@@ -164,7 +168,7 @@ export default function LeadModal({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dados' | 'contatos'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'contatos' | 'score'>('dados');
   const [verificandoId, setVerificandoId] = useState<string | null>(null);
   const [emailGeralStatus, setEmailGeralStatus] = useState<EmailStatus | undefined>(lead?.email_geral_status);
   const [emailGeralVerificadoEm, setEmailGeralVerificadoEm] = useState<string | null | undefined>(lead?.email_geral_verificado_em);
@@ -441,6 +445,27 @@ export default function LeadModal({
               <span>Decisores & Contatos</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300">
                 {contatosList.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('score')}
+              className={`pb-2.5 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition ${
+                activeTab === 'score'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-neutral-300'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              <span>Score & Qualificação</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                (lead?.score ?? 0) >= 60 
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' 
+                  : (lead?.score ?? 0) >= 30 
+                  ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300' 
+                  : 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400'
+              }`}>
+                {lead?.score ?? 0} pts
               </span>
             </button>
           </div>
@@ -875,6 +900,155 @@ export default function LeadModal({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'score' && (
+            <div className="space-y-6">
+              {/* Card Resumo do Score */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-neutral-900/60 border border-slate-200/80 dark:border-neutral-800 space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
+                      Pontuação de Qualificação
+                    </span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl font-extrabold text-slate-900 dark:text-neutral-100">
+                        {lead?.score ?? 0}
+                      </span>
+                      <span className="text-xs font-medium text-slate-400">/ 100 pontos</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {lead?.status_qualificacao === 'qualificado' && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Qualificado para Prospecção
+                      </span>
+                    )}
+                    {lead?.status_qualificacao === 'enriquecido' && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
+                        Enriquecido (Score &lt; 60 ou sem e-mail verificado)
+                      </span>
+                    )}
+                    {lead?.status_qualificacao === 'descartado' && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                        <XCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                        Descartado: {lead?.motivo_descarte || 'Critério de descarte'}
+                      </span>
+                    )}
+                    {(!lead?.status_qualificacao || lead?.status_qualificacao === 'bruto') && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-neutral-800 text-slate-700 dark:text-neutral-300">
+                        Lead Bruto
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Barra de Progresso */}
+                <div className="w-full bg-slate-200 dark:bg-neutral-800 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      (lead?.score ?? 0) >= 60
+                        ? 'bg-emerald-500'
+                        : (lead?.score ?? 0) >= 30
+                        ? 'bg-amber-500'
+                        : 'bg-slate-400'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, lead?.score ?? 0))}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] text-slate-600 dark:text-neutral-400">
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-neutral-200">Ensino Médio:</span>
+                    <span>{lead?.oferece_ensino_medio ? 'Sim' : 'Não / Não informado'}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-neutral-200">Matrículas EM:</span>
+                    <span>{lead?.matriculas_em ?? 0}</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-neutral-200">Decisores:</span>
+                    <span>{contatosList.length} cadastrado(s)</span>
+                  </div>
+                  <div>
+                    <span className="font-semibold block text-slate-800 dark:text-neutral-200">Status Funil:</span>
+                    <span className="capitalize">{lead?.status_funil || 'novo'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detalhamento dos Critérios */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-neutral-100 uppercase tracking-wider flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>Critérios Pontuados no Cálculo</span>
+                  </h3>
+                  <a
+                    href="/configuracoes/score"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <Sliders className="w-3 h-3" />
+                    <span>Ajustar Pesos</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+
+                {(() => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const criterios = (lead?.score_detalhes as any)?.criterios || 
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    (lead?.score_detalhes as any)?.score?.criterios || 
+                                    [];
+
+                  if (!criterios || criterios.length === 0) {
+                    return (
+                      <div className="p-6 text-center border-2 border-dashed border-slate-200 dark:border-neutral-800 rounded-xl text-slate-400 dark:text-neutral-500 text-xs">
+                        Nenhum detalhe de pontuação gravado para esta escola ainda. Salve a escola ou execute a rotina de recálculo geral.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="border border-slate-200/80 dark:border-neutral-800 rounded-xl divide-y divide-slate-100 dark:divide-neutral-800/80 overflow-hidden bg-white dark:bg-[#121215]">
+                      {criterios.map((crit: { criterio?: string; regra?: string; pontos: number; motivo?: string }, idx: number) => {
+                        const isPositive = crit.pontos > 0;
+                        const isNegative = crit.pontos < 0;
+
+                        return (
+                          <div key={idx} className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-slate-50/50 dark:hover:bg-neutral-900/30 transition">
+                            <div className="space-y-0.5 min-w-0">
+                              <span className="font-bold text-slate-900 dark:text-neutral-100 block truncate">
+                                {crit.motivo || crit.criterio || crit.regra}
+                              </span>
+                              <span className="text-[10px] text-slate-400 dark:text-neutral-500 font-mono block">
+                                Critério: {crit.criterio || crit.regra}
+                              </span>
+                            </div>
+
+                            <span
+                              className={`shrink-0 px-2 py-0.5 rounded-lg text-xs font-bold border ${
+                                isPositive
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                  : isNegative
+                                  ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                  : 'bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border-slate-200 dark:border-neutral-700'
+                              }`}
+                            >
+                              {isPositive ? `+${crit.pontos}` : crit.pontos} pts
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>

@@ -32,6 +32,11 @@ import {
   createInteracao, 
   getInteracoesByEscolaId 
 } from '@/lib/repositorio/interacoes';
+import {
+  getConfigScores,
+  updateConfigScore,
+  recalcularTodosScores
+} from '@/lib/repositorio/config_score';
 
 /**
  * Busca todas as escolas com seus respectivos contatos no CRM
@@ -588,4 +593,51 @@ export async function verificarEmailAction(params: {
     };
   }
 }
+
+/**
+ * Busca todos os parâmetros de configuração de score
+ */
+export async function getConfigScoreAction() {
+  await requireUser();
+  return await getConfigScores();
+}
+
+/**
+ * Atualiza o valor de um peso/parâmetro de score
+ */
+export async function updateConfigScoreAction(
+  chave: string, 
+  valor: number | null, 
+  valor_texto?: string | null
+): Promise<{ success: boolean; error?: string }> {
+  await requireUser();
+  const res = await updateConfigScore(chave, valor, valor_texto);
+  if (res.success) {
+    try {
+      revalidatePath('/configuracoes/score');
+      revalidatePath('/');
+    } catch {
+      // Ignora fora de contexto HTTP
+    }
+  }
+  return res;
+}
+
+/**
+ * Recalcula os scores de todas as escolas no banco usando a função calcular_score()
+ */
+export async function recalcularScoresAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+  await requireUser();
+  const res = await recalcularTodosScores();
+  if (res.success) {
+    try {
+      revalidatePath('/configuracoes/score');
+      revalidatePath('/');
+    } catch {
+      // Ignora fora de contexto HTTP
+    }
+  }
+  return res;
+}
+
 

@@ -24,6 +24,7 @@ export async function getEscolasComContatos(): Promise<EscolaComContatos[]> {
       *,
       contatos (*)
     `)
+    .order('score', { ascending: false, nullsFirst: false })
     .order('criado_em', { ascending: false });
 
   if (error) {
