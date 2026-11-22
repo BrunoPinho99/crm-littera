@@ -82,6 +82,10 @@ export interface Escola {
   motivo_descarte: string | null;
   status_funil: StatusFunil;
   entregue_em: string | null;
+  entregue_lote_id?: string | null;
+  resumo_pesquisa?: string | null;
+  gancho_personalizacao?: string | null;
+  fontes_pesquisa?: string[] | null;
   ultima_interacao: string | null;
   precisa_revisao: boolean;
   observacao_revisao: string | null;
@@ -135,6 +139,25 @@ export interface AgenteExecucao {
   leads_encontrados: number;
   leads_inseridos: number;
   mensagem: string | null;
+  etapa_atual?: string | null;
+  detalhes?: {
+    dias_restantes?: number;
+    motivo_incompleto?: string | null;
+    erro?: string;
+    stack?: string;
+    [key: string]: unknown;
+  } | null;
+  custo_total_usd?: number | null;
+  gatilho?: 'agendado' | 'manual' | null;
+}
+
+export interface LoteDiario {
+  id: string;
+  data: string;
+  execucao_id: string | null;
+  quantidade: number;
+  motivo_incompleto: string | null;
+  criado_em: string;
 }
 
 export interface CustoAgente {

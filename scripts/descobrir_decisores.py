@@ -189,7 +189,9 @@ def consolidar_contatos(
 def processar_decisores_escolas(
     limite: int = 40,
     dry_run: bool = False,
-    reprocessar: bool = False
+    reprocessar: bool = False,
+    execucao_id: Optional[str] = None,
+    registrar_execucao: bool = True
 ) -> Dict[str, Any]:
     iniciado_em = datetime.now(timezone.utc)
     url, key = get_supabase_credentials()
@@ -216,8 +218,7 @@ def processar_decisores_escolas(
     escolas = res.json()
     logging.info(f"Encontradas {len(escolas)} escolas para descoberta de decisores.")
 
-    execucao_id = None
-    if not dry_run:
+    if not dry_run and registrar_execucao and not execucao_id:
         execucao_id = registrar_agente_execucao(
             url, key, "rodando", len(escolas), 0, "Iniciando descoberta de decisores via site", iniciado_em
         )
@@ -456,7 +457,7 @@ def processar_decisores_escolas(
     )
     logging.info(f"=== RESUMO: {msg_final} ===")
 
-    if not dry_run and execucao_id:
+    if not dry_run and execucao_id and registrar_execucao:
         patch_exec = {
             "finalizado_em": datetime.now(timezone.utc).isoformat(),
             "status": "sucesso",

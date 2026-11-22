@@ -206,32 +206,20 @@ def buscar_emails_pendentes(
     return contatos, escolas
 
 
-def main():
-    args = parse_args()
+def verificar_emails_pendentes(
+    limite: int = 200,
+    dry_run: bool = False,
+    reverificar: bool = False,
+    execucao_id: Optional[str] = None,
+    registrar_execucao: bool = True
+) -> Dict[str, Any]:
     iniciado_em = datetime.now(timezone.utc)
-
     url, key = get_supabase_credentials()
-    logging.info(f"Iniciando verificação de e-mails (limite={args.limite}, dry_run={args.dry_run})...")
+    logging.info(f"Iniciando verificação de e-mails (limite={limite}, dry_run={dry_run})...")
 
-    contatos, escolas = buscar_emails_pendentes(url, key, args.limite, reverificar=args.reverificar)
+    contatos, escolas = buscar_emails_pendentes(url, key, limite, reverificar=reverificar)
     total_pendentes = len(contatos) + len(escolas)
     logging.info(f"Encontrados: {len(contatos)} contatos e {len(escolas)} escolas com e-mail pendente de verificação.")
-
-    if total_pendentes == 0:
-        logging.info("Nenhum e-mail pendente de verificação. Tudo atualizado nos últimos 90 dias.")
-        print("\n=======================================================")
-        print("RESUMO DA VERIFICAÇÃO DE E-MAILS")
-        print("=======================================================")
-        print("Total analisado: 0")
-        print("Custo estimado: $0.0000 USD")
-        print("=======================================================\n")
-        return
-
-    execucao_id = None
-    if not args.dry_run:
-        execucao_id = registrar_agente_execucao(
-            url, key, "rodando", total_pendentes, 0, "Iniciando verificação de e-mails", iniciado_em
-        )
 
     stats = {
         "valido": 0,
@@ -241,8 +229,18 @@ def main():
         "desconhecido": 0,
         "cache": 0,
         "novas_verificacoes": 0,
-        "custo_total_usd": 0.0
+        "custo_total_usd": 0.0,
+        "total_processados": total_pendentes
     }
+
+    if total_pendentes == 0:
+        logging.info("Nenhum e-mail pendente de verificação. Tudo atualizado nos últimos 90 dias.")
+        return stats
+
+    if not dry_run and registrar_execucao and not execucao_id:
+        execucao_id = registrar_agente_execucao(
+            url, key, "rodando", total_pendentes, 0, "Iniciando verificação de e-mails", iniciado_em
+        )
 
     headers_patch = {
         "apikey": key,
@@ -257,7 +255,7 @@ def main():
             escola_id = c.get("escola_id")
             logging.info(f"[{idx}/{total_pendentes}] (Contato) Verificando: {email}...")
 
-            cached = None if args.reverificar else consultar_cache_verificacao(url, key, email, dias_validade=90)
+            cached = None if reverificar else consultar_cache_verificacao(url, key, email, dias_validade=90)
             if cached:
                 status = cached["status"]
                 sub_status = cached.get("sub_status")
@@ -272,7 +270,7 @@ def main():
                 stats["novas_verificacoes"] += 1
                 stats["custo_total_usd"] += custo
 
-                if not args.dry_run:
+                if not dry_run:
                     salvar_cache_verificacao(url, key, email, status, sub_status, res.get("provedor", "desconhecido"), res.get("bruto"))
                     if custo > 0:
                         registrar_custo(url, key, escola_id, f"verificacao_{res.get('provedor')}", 1, custo, execucao_id)
@@ -281,8 +279,7 @@ def main():
 
             stats[status] = stats.get(status, 0) + 1
 
-            if not args.dry_run:
-                # Atualiza contato no Supabase
+            if not dry_run:
                 patch_url = f"{url}/rest/v1/contatos?id=eq.{c['id']}"
                 patch_payload = {
                     "email_status": status,
@@ -297,7 +294,7 @@ def main():
             escola_id = e["id"]
             logging.info(f"[{idx}/{total_pendentes}] (Escola) Verificando email_geral: {email}...")
 
-            cached = None if args.reverificar else consultar_cache_verificacao(url, key, email, dias_validade=90)
+            cached = None if reverificar else consultar_cache_verificacao(url, key, email, dias_validade=90)
             if cached:
                 status = cached["status"]
                 sub_status = cached.get("sub_status")
@@ -312,7 +309,7 @@ def main():
                 stats["novas_verificacoes"] += 1
                 stats["custo_total_usd"] += custo
 
-                if not args.dry_run:
+                if not dry_run:
                     salvar_cache_verificacao(url, key, email, status, sub_status, res.get("provedor", "desconhecido"), res.get("bruto"))
                     if custo > 0:
                         registrar_custo(url, key, escola_id, f"verificacao_{res.get('provedor')}", 1, custo, execucao_id)
@@ -321,7 +318,7 @@ def main():
 
             stats[status] = stats.get(status, 0) + 1
 
-            if not args.dry_run:
+            if not dry_run:
                 patch_url = f"{url}/rest/v1/escolas?id=eq.{e['id']}"
                 patch_payload = {
                     "email_geral_status": status,
@@ -338,27 +335,59 @@ def main():
         )
         logging.info(msg_sucesso)
 
-        if not args.dry_run and execucao_id:
+        if not dry_run and execucao_id and registrar_execucao:
             registrar_agente_execucao(
                 url, key, "sucesso", total_pendentes, total_pendentes, msg_sucesso, iniciado_em
             )
 
+        return stats
+
     except CreditosEsgotadosError as ex:
         err_msg = f"INTERRUPÇÃO CRÍTICA: {ex}"
         logging.error(err_msg)
-        if not args.dry_run and execucao_id:
+        if not dry_run and execucao_id and registrar_execucao:
             registrar_agente_execucao(
                 url, key, "erro", total_pendentes, 0, err_msg, iniciado_em
             )
-        sys.exit(1)
+        raise
     except Exception as ex:
         err_msg = f"Erro inesperado durante verificação de e-mails: {ex}"
         logging.error(err_msg)
-        if not args.dry_run and execucao_id:
+        if not dry_run and execucao_id and registrar_execucao:
             registrar_agente_execucao(
                 url, key, "erro", total_pendentes, 0, err_msg, iniciado_em
             )
+        raise
+
+
+def main():
+    args = parse_args()
+    try:
+        stats = verificar_emails_pendentes(
+            limite=args.limite,
+            dry_run=args.dry_run,
+            reverificar=args.reverificar
+        )
+    except Exception as ex:
+        logging.error(f"Falha na execução: {ex}")
         sys.exit(1)
+
+    print("\n" + "=" * 65)
+    print("RESUMO DA VERIFICAÇÃO DE E-MAILS")
+    print("=" * 65)
+    print(f"Total de E-mails Analisados: {stats.get('total_processados', 0)}")
+    print(f"  - Reutilizados do Cache (<= 90 dias): {stats['cache']}")
+    print(f"  - Novas Consultas Realizadas:        {stats['novas_verificacoes']}")
+    print("-" * 65)
+    print("DISTRIBUIÇÃO DE STATUS:")
+    print(f"  - Válidos:      {stats['valido']:>4}")
+    print(f"  - Inválidos:    {stats['invalido']:>4}")
+    print(f"  - Arriscados:   {stats['arriscado']:>4}")
+    print(f"  - Catch-all:    {stats['catch_all']:>4}")
+    print(f"  - Desconhecidos:{stats['desconhecido']:>4}")
+    print("-" * 65)
+    print(f"Custo Total Estimado: ${stats['custo_total_usd']:.4f} USD")
+    print("=" * 65 + "\n")
 
     print("\n" + "=" * 65)
     print("RESUMO DA VERIFICAÇÃO DE E-MAILS")

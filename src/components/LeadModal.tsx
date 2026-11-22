@@ -22,7 +22,8 @@ import {
   Award,
   Sliders,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Sparkles
 } from 'lucide-react';
 import { 
   addContatoAction, 
@@ -475,6 +476,65 @@ export default function LeadModal({
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
           {activeTab === 'dados' ? (
             <form id="escola-form" onSubmit={handleSubmitEscola} className="space-y-4">
+              {/* Resumo e Gancho de Personalização SDR (Claude) */}
+              {(lead?.resumo_pesquisa || lead?.gancho_personalizacao) && (
+                <div className="p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      Pesquisa & Personalização SDR
+                    </span>
+                    {lead.entregue_em && (
+                      <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-mono">
+                        Entregue em: {new Date(lead.entregue_em).toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+
+                  {lead.resumo_pesquisa && (
+                    <div className="text-xs text-indigo-950 dark:text-indigo-200">
+                      <span className="font-semibold block text-[11px] text-indigo-700 dark:text-indigo-300 mb-0.5">
+                        Resumo da Instituição:
+                      </span>
+                      <p className="leading-relaxed">{lead.resumo_pesquisa}</p>
+                    </div>
+                  )}
+
+                  {lead.gancho_personalizacao && (
+                    <div className="text-xs text-indigo-950 dark:text-indigo-200">
+                      <span className="font-semibold block text-[11px] text-indigo-700 dark:text-indigo-300 mb-0.5">
+                        Gancho de Abertura (Personalização de E-mail):
+                      </span>
+                      <p className="italic bg-white/70 dark:bg-black/30 p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-900/40 leading-relaxed">
+                        &ldquo;{lead.gancho_personalizacao}&rdquo;
+                      </p>
+                    </div>
+                  )}
+
+                  {lead.fontes_pesquisa && lead.fontes_pesquisa.length > 0 && (
+                    <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+                      <span className="font-semibold text-[10px] text-indigo-700 dark:text-indigo-300 block mb-1">
+                        Fontes Auditadas:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {lead.fontes_pesquisa.map((url, idx) => (
+                          <a
+                            key={idx}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline max-w-[320px] truncate"
+                          >
+                            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{url}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Nome da Escola */}
                 <div className="md:col-span-2 space-y-1.5">

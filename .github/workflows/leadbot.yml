@@ -1,11 +1,33 @@
-name: Agente Diário de Extração de Leads
+name: Agente SDR diário
 
 on:
-  workflow_dispatch: # Permite disparo manual pelo painel do GitHub Actions (será refeito na Etapa 8)
+  schedule:
+    # 06:30 em America/Sao_Paulo (UTC-3, sem horário de verão) = 09:30 UTC.
+    # Nota: O GitHub Actions pode atrasar o disparo do cron em alguns minutos dependendo da carga dos servidores.
+    - cron: '30 9 * * *'
+
+  workflow_dispatch:
+    inputs:
+      forcar:
+        description: 'Forçar entrega de novo lote hoje mesmo se já entregue'
+        type: boolean
+        default: false
+      gatilho:
+        description: 'Tipo de gatilho da execução'
+        type: choice
+        options:
+          - manual
+          - agendado
+        default: 'manual'
+
+concurrency:
+  group: agente-sdr
+  cancel-in-progress: false
 
 jobs:
-  importar-censo-diario:
+  agente-sdr-diario:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout do Repositório
@@ -22,10 +44,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r scripts/requirements.txt
 
-      - name: Executar Importador do Censo
+      - name: Executar Agente SDR Diário
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MIN_MATRICULAS_EM: '40'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest' }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          EMAIL_VERIFIER: ${{ vars.EMAIL_VERIFIER || 'zerobounce' }}
+          EMAIL_VERIFIER_API_KEY: ${{ secrets.EMAIL_VERIFIER_API_KEY }}
+          HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          META_DIARIA: ${{ vars.META_DIARIA || '20' }}
+          MAX_CUSTO_DIARIO_USD: ${{ vars.MAX_CUSTO_DIARIO_USD || '5' }}
+          LITTERA_CONTATO: ${{ vars.LITTERA_CONTATO || 'contato@littera.com.br' }}
         run: |
-          python scripts/importar_censo.py
+          GATILHO="${{ github.event.inputs.gatilho || (github.event_name == 'schedule' && 'agendado' || 'manual') }}"
+          FORCAR_FLAG=""
+          if [ "${{ github.event.inputs.forcar }}" = "true" ]; then
+            FORCAR_FLAG="--forcar"
+          fi
+          python scripts/agente_sdr.py --gatilho "$GATILHO" $FORCAR_FLAG
+
+      - name: Marcar Execução como Erro em caso de Falha no Runner
+        if: failure()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python -c "
+          import os, requests
+          from datetime import datetime, timezone
+          url = os.getenv('SUPABASE_URL')
+          key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+          if url and key:
+              headers = {'apikey': key, 'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
+              r = requests.get(f'{url}/rest/v1/agente_execucoes?status=eq.rodando&order=iniciado_em.desc&limit=1', headers=headers)
+              if r.status_code == 200 and r.json():
+                  exec_id = r.json()[0]['id']
+                  patch = {
+                      'status': 'erro',
+                      'etapa_atual': 'Erro (GitHub Actions Workflow)',
+                      'mensagem': 'Falha no runner do GitHub Actions antes da conclusão normal',
+                      'finalizado_em': datetime.now(timezone.utc).isoformat(),
+                      'detalhes': {'erro': 'Runner GitHub Actions abortado ou falhou'}
+                  }
+                  requests.patch(f'{url}/rest/v1/agente_execucoes?id=eq.{exec_id}', headers=headers, json=patch)
+                  print(f'Execução {exec_id} marcada como erro no Supabase.')
+          "

@@ -172,7 +172,13 @@ def atualizar_redes(url: str, key: str):
     except Exception as ex:
         logging.warning(f"Erro ao processar identificação de redes: {ex}")
 
-def enriquecer_escolas(limite: int = 100, dry_run: bool = False, reprocessar: bool = False) -> Dict[str, Any]:
+def enriquecer_escolas(
+    limite: int = 100,
+    dry_run: bool = False,
+    reprocessar: bool = False,
+    execucao_id: Optional[str] = None,
+    registrar_execucao: bool = True
+) -> Dict[str, Any]:
     iniciado_em = datetime.now(timezone.utc)
     url, key = get_supabase_credentials()
 
@@ -405,7 +411,7 @@ def enriquecer_escolas(limite: int = 100, dry_run: bool = False, reprocessar: bo
     )
     logging.info(f"=== RESUMO: {msg_exec} ===")
 
-    if not dry_run:
+    if not dry_run and registrar_execucao:
         registrar_agente_execucao(
             status="sucesso",
             leads_encontrados=stats["consultadas"],

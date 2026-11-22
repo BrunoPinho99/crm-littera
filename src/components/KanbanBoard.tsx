@@ -20,7 +20,8 @@ import {
   ShieldAlert,
   HelpCircle,
   ListOrdered,
-  Award
+  Award,
+  ExternalLink
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
@@ -382,6 +383,34 @@ export default function KanbanBoard({
                           <div className="flex items-center gap-1.5 text-slate-500 dark:text-neutral-400 pt-0.5">
                             <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                             <span>{lead.telefone}</span>
+                          </div>
+                        )}
+
+                        {/* Gancho de Personalização SDR */}
+                        {lead.gancho_personalizacao && (
+                          <div className="mt-2 p-2 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-[11px] text-indigo-900 dark:text-indigo-200">
+                            <div className="flex items-center justify-between gap-1 mb-1 font-semibold text-[10px] text-indigo-700 dark:text-indigo-300">
+                              <span className="flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                                Gancho SDR
+                              </span>
+                              {lead.fontes_pesquisa && lead.fontes_pesquisa.length > 0 && lead.fontes_pesquisa[0] && (
+                                <a
+                                  href={lead.fontes_pesquisa[0]}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 text-[9px]"
+                                  title={lead.fontes_pesquisa[0]}
+                                >
+                                  Fonte
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </div>
+                            <p className="line-clamp-2 italic leading-relaxed text-[10.5px]">
+                              &ldquo;{lead.gancho_personalizacao}&rdquo;
+                            </p>
                           </div>
                         )}
                       </div>

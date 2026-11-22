@@ -1,12 +1,19 @@
-import { getLeads } from '@/actions/leads';
+import { getLeads, getLoteHojeAction, getLastAgentExecution } from '@/actions/leads';
 import CRMTable from '@/components/CRMTable';
 import HeaderNav from '@/components/HeaderNav';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
   let leads = [];
+  let loteHoje = null;
+  let ultimaExecucao = null;
+
   try {
-    leads = await getLeads();
+    [leads, loteHoje, ultimaExecucao] = await Promise.all([
+      getLeads(),
+      getLoteHojeAction(),
+      getLastAgentExecution(),
+    ]);
   } catch {
     redirect('/login');
   }
@@ -18,7 +25,11 @@ export default async function DashboardPage() {
 
       {/* Conteúdo com Menu Lateral Retrátil Flutuante */}
       <div className="flex-1 flex relative overflow-hidden">
-        <CRMTable initialLeads={leads} />
+        <CRMTable
+          initialLeads={leads}
+          initialLoteHoje={loteHoje}
+          initialUltimaExecucao={ultimaExecucao}
+        />
       </div>
     </main>
   );

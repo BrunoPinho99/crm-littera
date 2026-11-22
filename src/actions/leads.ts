@@ -11,7 +11,8 @@ import {
   Interacao, 
   StatusFunil, 
   AgenteExecucao,
-  EmailStatus
+  EmailStatus,
+  LoteDiario
 } from '@/types/database';
 import { pickLeadEmail } from '@/lib/contact';
 import { 
@@ -498,41 +499,92 @@ export async function markContactSent(leadId: string): Promise<{ success: boolea
 
 export async function getLastAgentExecution(): Promise<AgenteExecucao | null> {
   await requireUser();
-  const supabase = await createServerSupabaseClient();
-
-  try {
-    const { data, error } = await supabase
-      .from('agente_execucoes')
-      .select('*')
-      .order('iniciado_em', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Erro ao buscar última execução do agente:', error);
-      return null;
-    }
-
-    return (data as AgenteExecucao) || null;
-  } catch (err) {
-    console.error('Falha na requisição de agente_execucoes:', err);
-    return null;
-  }
+  const { getUltimaExecucao } = await import('@/lib/repositorio/agente');
+  return getUltimaExecucao();
 }
 
-export async function runAgentScout(_count = 20): Promise<{
+export async function getLoteHojeAction(): Promise<LoteDiario | null> {
+  await requireUser();
+  const { getLoteDiarioHoje } = await import('@/lib/repositorio/agente');
+  return getLoteDiarioHoje();
+}
+
+export async function getHistoricoExecucoesAction(limit = 50): Promise<AgenteExecucao[]> {
+  await requireUser();
+  const { getHistoricoExecucoes } = await import('@/lib/repositorio/agente');
+  return getHistoricoExecucoes(limit);
+}
+
+/**
+ * Server action protegida que aciona o workflow Agente SDR Diário no GitHub Actions.
+ * Utiliza o endpoint oficial POST /repos/{owner}/{repo}/actions/workflows/leadbot.yml/dispatches
+ */
+export async function triggerAgentWorkflow(params?: { forcar?: boolean }): Promise<{
   success: boolean;
   message?: string;
-  count?: number;
   error?: string;
 }> {
-  void _count;
   await requireUser();
 
-  return {
-    success: false,
-    error: 'Agente em reconstrução: será ligado na Etapa 8',
-  };
+  const token = process.env.GITHUB_DISPATCH_TOKEN;
+  const repo = process.env.GITHUB_REPO || 'BrunoPinho99/crm-littera';
+
+  if (!token) {
+    return {
+      success: false,
+      error: 'GITHUB_DISPATCH_TOKEN não configurado. Adicione o Personal Access Token com permissão Actions:write nas variáveis de ambiente da Vercel / .env.local.',
+    };
+  }
+
+  const forcar = Boolean(params?.forcar);
+
+  try {
+    const url = `https://api.github.com/repos/${repo}/actions/workflows/leadbot.yml/dispatches`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'CRM-Littera-Agent',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: {
+          gatilho: 'manual',
+          forcar: String(forcar),
+        },
+      }),
+    });
+
+    if (response.status === 204) {
+      try {
+        revalidatePath('/');
+      } catch {
+        // Ignora fora de contexto HTTP direto
+      }
+      return {
+        success: true,
+        message: forcar
+          ? 'Workflow disparado com sucesso! (Modo forçado: nova remessa será gerada)'
+          : 'Workflow do Agente SDR disparado com sucesso no GitHub Actions!',
+      };
+    }
+
+    const errBody = await response.json().catch(() => null);
+    const msg = errBody?.message || `GitHub API respondeu com status ${response.status}`;
+    return {
+      success: false,
+      error: `Erro ao acionar workflow no GitHub: ${msg}`,
+    };
+  } catch (err) {
+    console.error('Erro na requisição para GitHub Actions:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Falha na conexão com GitHub Actions',
+    };
+  }
 }
 
 /**

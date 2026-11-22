@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { EscolaComContatos, StatusFunil, EmailStatus } from '@/types/database';
+import { EscolaComContatos, StatusFunil, EmailStatus, LoteDiario, AgenteExecucao } from '@/types/database';
 import { 
   updateLeadStatus, 
   createLead, 
@@ -40,11 +40,14 @@ import {
   Users,
   ShieldCheck,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  ExternalLink
 } from 'lucide-react';
 
 interface CRMDashboardProps {
   initialLeads: EscolaComContatos[];
+  initialLoteHoje?: LoteDiario | null;
+  initialUltimaExecucao?: AgenteExecucao | null;
 }
 
 type FilterStatus = 'todos' | StatusFunil;
@@ -100,14 +103,42 @@ export function getScoreBarClass(score: number | null | undefined): string {
   return 'bg-slate-400 dark:bg-neutral-600';
 }
 
-export default function CRMTable({ initialLeads }: CRMDashboardProps) {
+export default function CRMTable({
+  initialLeads,
+  initialLoteHoje,
+  initialUltimaExecucao,
+}: CRMDashboardProps) {
   const [leads, setLeads] = useState<EscolaComContatos[]>(initialLeads);
   const [currentTab, setCurrentTab] = useState<'leads' | 'kanban'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('todos');
   const [onlyCurated, setOnlyCurated] = useState(false);
+  const [onlyTodayLeads, setOnlyTodayLeads] = useState(true);
   const [agentMode] = useState<MascotMode>('working');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Data atual em America/Sao_Paulo (YYYY-MM-DD)
+  const hojeSP = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch {
+      return new Date().toISOString().split('T')[0];
+    }
+  }, []);
+
+  // Contagem de leads entregues hoje
+  const leadsHojeCount = useMemo(() => {
+    return leads.filter((l) => l.entregue_em === hojeSP).length;
+  }, [leads, hojeSP]);
+
+  // Alerta de autonomia da base
+  const diasRestantes = initialUltimaExecucao?.detalhes?.dias_restantes;
+  const isBaseAcabando = typeof diasRestantes === 'number' && diasRestantes < 5;
 
   // Estados do Modal de CRUD
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -158,7 +189,9 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
 
       const matchesCurated = onlyCurated ? lead.status_qualificacao === 'qualificado' : true;
 
-      return matchesSearch && matchesStatus && matchesCurated;
+      const matchesToday = onlyTodayLeads ? (lead.entregue_em === hojeSP) : true;
+
+      return matchesSearch && matchesStatus && matchesCurated && matchesToday;
     });
 
     return list.sort((a, b) => {
@@ -170,7 +203,7 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
       }
       return new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime();
     });
-  }, [leads, searchTerm, statusFilter, onlyCurated, sortMode]);
+  }, [leads, searchTerm, statusFilter, onlyCurated, onlyTodayLeads, hojeSP, sortMode]);
 
   // Contadores para métricas
   const counts = useMemo(() => {
@@ -575,6 +608,67 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
           </div>
         </div>
 
+        {/* ALERTA DE BASE ESGOTANDO (< 5 DIAS) */}
+        {isBaseAcabando && (
+          <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center justify-between shadow-xs animate-in fade-in">
+            <div className="flex items-center gap-2.5 text-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>
+                A base atual rende cerca de <strong>{diasRestantes} dias</strong>. Amplie as regiões em <code className="bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded text-[11px] font-mono">scripts/config/regioes.json</code> e rode o importador do Censo.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* CONTADOR DE LOTE DIÁRIO E FILTRO DE ENTREGA */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0 border border-blue-100 dark:border-blue-900/40">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-900 dark:text-neutral-100">
+                  {leadsHojeCount} de 20 entregues hoje
+                </span>
+                {initialLoteHoje?.motivo_incompleto && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                    Motivo: {initialLoteHoje.motivo_incompleto === 'base_esgotada' ? 'Base esgotada' : initialLoteHoje.motivo_incompleto === 'teto_custo' ? 'Teto de custo atingido' : initialLoteHoje.motivo_incompleto}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-neutral-400">
+                Seleção autônoma diária do Agente SDR por ranking de qualificação
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-neutral-900 p-1 rounded-xl self-start sm:self-auto border border-slate-200/60 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={() => setOnlyTodayLeads(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                onlyTodayLeads
+                  ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200'
+              }`}
+            >
+              Leads de hoje ({leadsHojeCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setOnlyTodayLeads(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                !onlyTodayLeads
+                  ? 'bg-white dark:bg-neutral-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200'
+              }`}
+            >
+              Todos os leads ({leads.length})
+            </button>
+          </div>
+        </div>
+
         {/* CARDS DE MÉTRICAS */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
           <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
@@ -737,6 +831,32 @@ export default function CRMTable({ initialLeads }: CRMDashboardProps) {
                                 <span>{lead.cidade}/{lead.uf}</span>
                                 {lead.bairro && <span>• {lead.bairro}</span>}
                               </div>
+
+                              {lead.gancho_personalizacao && (
+                                <div className="mt-2 p-2 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 text-[11px] text-indigo-900 dark:text-indigo-200 max-w-sm">
+                                  <div className="flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-400 text-[10px]">
+                                    <Sparkles className="w-3 h-3" />
+                                    <span>Gancho SDR:</span>
+                                  </div>
+                                  <p className="mt-0.5 italic">
+                                    &ldquo;{lead.gancho_personalizacao}&rdquo;
+                                  </p>
+                                  {lead.fontes_pesquisa && lead.fontes_pesquisa.length > 0 && (
+                                    <div className="mt-1 flex items-center gap-1">
+                                      <span className="text-[10px] text-slate-400">Fonte:</span>
+                                      <a
+                                        href={lead.fontes_pesquisa[0]}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                                      >
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                        <span className="truncate max-w-[150px]">{lead.fontes_pesquisa[0]}</span>
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </td>
 
                             {/* Score */}

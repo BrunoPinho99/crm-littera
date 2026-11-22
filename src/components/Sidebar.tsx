@@ -17,6 +17,8 @@ import Link from 'next/link';
 import MascotAgent from './MascotAgent';
 import { getLastAgentExecution } from '@/actions/leads';
 import { AgenteExecucao } from '@/types/database';
+import RodarAgenteModal from './RodarAgenteModal';
+import { Play } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: 'leads' | 'kanban';
@@ -49,25 +51,36 @@ export default function Sidebar({
   const [hoveredFlyout, setHoveredFlyout] = useState<string | null>(null);
   const [execution, setExecution] = useState<AgenteExecucao | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    getLastAgentExecution()
-      .then((data) => {
-        if (isMounted) {
-          setExecution(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error('Erro ao buscar status do agente na Sidebar:', err);
-        if (isMounted) setLoading(false);
-      });
+    const fetchStatus = () => {
+      getLastAgentExecution()
+        .then((data) => {
+          if (isMounted) {
+            setExecution(data);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          console.error('Erro ao buscar status do agente na Sidebar:', err);
+          if (isMounted) setLoading(false);
+        });
+    };
+
+    fetchStatus();
+
+    let interval: NodeJS.Timeout | null = null;
+    if (execution?.status === 'rodando') {
+      interval = setInterval(fetchStatus, 15000);
+    }
 
     return () => {
       isMounted = false;
+      if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [execution?.status]);
 
   const agentMascotMode = execution?.status === 'rodando' ? 'working' : 'idle';
 
@@ -184,6 +197,24 @@ export default function Sidebar({
                 </div>
               )}
             </Link>
+
+            <Link
+              href="/agente"
+              className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900/60 hover:text-slate-900 dark:hover:text-neutral-200 transition cursor-pointer"
+              title="Histórico de Execuções do Agente SDR"
+            >
+              <div className="w-6 flex justify-center shrink-0">
+                <Bot className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              {isOpen && (
+                <div className="flex-1 flex items-center justify-between min-w-0">
+                  <span className="truncate">Agente SDR</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400">
+                    Histórico
+                  </span>
+                </div>
+              )}
+            </Link>
           </nav>
 
           {/* Painel do Agente SDR Autônomo com Status Real */}
@@ -246,15 +277,26 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Rotina Automática Diária */}
-                <div className="p-3 rounded-xl bg-slate-100/60 dark:bg-neutral-900/60 border border-slate-200/80 dark:border-neutral-800/80">
-                  <div className="flex items-center gap-1.5 text-slate-700 dark:text-neutral-300 font-bold text-[11px]">
-                    <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                    <span>Rotina GitHub Actions</span>
+                {/* Rotina Automática Diária e Botão de Disparo */}
+                <div className="p-3 rounded-xl bg-slate-100/60 dark:bg-neutral-900/60 border border-slate-200/80 dark:border-neutral-800/80 space-y-2.5">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-slate-700 dark:text-neutral-300 font-bold text-[11px]">
+                      <Clock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      <span>Rotina GitHub Actions</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-neutral-400 mt-1 leading-tight">
+                      Disparo agendado às <strong>06:30 de Brasília</strong> (09:30 UTC) via leadbot.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-neutral-400 mt-1 leading-tight">
-                    Disparo agendado às <strong>08:00 UTC</strong> (05:00 de Brasília) via leadbot.
-                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition shadow-xs cursor-pointer active:scale-95"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>Rodar agente agora</span>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -343,6 +385,12 @@ export default function Sidebar({
           )}
         </div>
       </aside>
+
+      <RodarAgenteModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => setIsModalOpen(false)}
+      />
     </>
   );
 }
