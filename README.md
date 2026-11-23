@@ -82,9 +82,12 @@ SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role-secreta
 # Apify (opcional)
 APIFY_TOKEN=seu_apify_token_aqui
 
-# Envio de E-mails via Gmail (Nodemailer SMTP)
-GMAIL_USER=seu-email@dominio.com
-GMAIL_APP_PASSWORD=sua_senha_de_app_gmail
+# Infraestrutura de Envio (Brevo API + Descadastro)
+BREVO_API_KEY=xkeysib-sua_chave_brevo_v3
+UNSUBSCRIBE_SECRET=sua_chave_secreta_32_bytes_para_hmac
+APP_URL=https://littera.app.br
+LITTERA_RAZAO_SOCIAL="Littera Educação e Tecnologia LTDA"
+LITTERA_ENDERECO="Brasília - DF, Brasil"
 ```
 
 ### 2. Instalação e Execução
@@ -110,8 +113,11 @@ Cadastre em **Project Settings > Environment Variables**:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública `anon` ou `publishable` |
 | `SUPABASE_URL` | URL do projeto Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta de serviço (`service_role`) |
-| `GMAIL_USER` | E-mail corporativo do remetente Gmail |
-| `GMAIL_APP_PASSWORD` | Senha de aplicativo (16 dígitos) gerada na Conta Google |
+| `BREVO_API_KEY` | Chave de API v3 do Brevo para envio transacional SMTP |
+| `UNSUBSCRIBE_SECRET` | Chave secreta de 32 bytes para assinatura HMAC-SHA256 de tokens de descadastro |
+| `APP_URL` | URL base da aplicação (`https://littera.app.br`) |
+| `LITTERA_RAZAO_SOCIAL` | Razão social institucional para rodapé obrigatório |
+| `LITTERA_ENDERECO` | Endereço físico ou sede para rodapé obrigatório |
 | `APIFY_TOKEN` | (Opcional) Token para serviços Apify |
 
 ### 2. No GitHub Secrets (para os Workflows `importar_censo.yml` e `leadbot.yml`)

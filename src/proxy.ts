@@ -46,11 +46,14 @@ export async function proxy(request: NextRequest) {
     pathname === '/login' ||
     pathname.startsWith('/login/') ||
     pathname.startsWith('/auth/');
-  const isPublicApiRoute =
-    pathname.startsWith('/api/webhooks') || pathname.startsWith('/api/cron');
+  const isPublicRoute =
+    pathname.startsWith('/api/webhooks') ||
+    pathname.startsWith('/api/cron') ||
+    pathname === '/descadastro' ||
+    pathname.startsWith('/descadastro');
 
   // Se não estiver logado e tentar acessar qualquer rota privada: redireciona para /login
-  if (!user && !isAuthRoute && !isPublicApiRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
     return NextResponse.redirect(redirectUrl);

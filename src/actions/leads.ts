@@ -1,6 +1,7 @@
 'use server';
 
-import { getEmailTransporter, generateLeadEmailContent, GMAIL_USER } from '@/lib/email';
+import { generateLeadEmailContent } from '@/lib/envio/conteudoLead';
+import { enviarEmail } from '@/lib/envio/enviarEmail';
 import { revalidatePath } from 'next/cache';
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
 import { requireUser } from '@/lib/auth';
@@ -407,7 +408,7 @@ export async function addInteracaoAction(dados: {
 }
 
 // ==============================================================================
-// ENVIO DE E-MAILS
+// ENVIO DE E-MAILS (ETAPA 9 — BREVO API)
 // ==============================================================================
 
 export async function sendLeadEmailDirect(leadId: string): Promise<{
@@ -438,56 +439,37 @@ export async function sendLeadEmailDirect(leadId: string): Promise<{
       };
     }
 
-    const principal = (escola.contatos as Contato[])?.find((c) => c.principal);
+    const principal =
+      (escola.contatos as Contato[])?.find((c) => c.principal) ||
+      (escola.contatos as Contato[])?.[0];
+
     const { subject, text, html } = generateLeadEmailContent({
       nome_escola: escola.nome,
       nome_decisor: principal?.nome || null,
     });
 
-    const transporter = getEmailTransporter();
-    if (!transporter) {
-      return {
-        success: false,
-        error:
-          'Envio de e-mail não configurado. Nenhum e-mail foi enviado e o status não foi alterado.',
-      };
-    }
-
-    const senderEmail = GMAIL_USER || 'contato@littera.com.br';
-    const info = await transporter.sendMail({
-      from: `"Littera Educacional" <${senderEmail}>`,
-      to: recipient,
-      subject,
-      text,
+    const envioRes = await enviarEmail({
+      para: recipient,
+      nomeDestinatario: principal?.nome || escola.nome,
+      assunto: subject,
       html,
+      texto: text,
+      escolaId: escola.id,
+      contatoId: principal?.id || null,
     });
-
-    if (info.rejected && info.rejected.length > 0) {
-      return { success: false, error: `Gmail rejeitou o destinatário: ${info.rejected.join(', ')}` };
-    }
 
     // Atualiza status do funil para 'contato_enviado'
     await updateLeadStatus(leadId, 'contato_enviado', escola.status_funil);
 
-    // Registra a interação de envio de e-mail
-    await createInteracao({
-      escola_id: leadId,
-      contato_id: principal?.id || null,
-      tipo: 'email_enviado',
-      assunto: subject,
-      conteudo: text,
-      metadata: { recipient, messageId: info.messageId },
-    });
-
     return {
       success: true,
-      message: `E-mail enviado com sucesso para ${recipient}!`,
+      message: `E-mail enviado com sucesso via Brevo para ${recipient} (Message-ID: ${envioRes.provedorMessageId})!`,
     };
   } catch (err: unknown) {
-    console.error('Erro ao enviar e-mail:', err);
+    console.error('Erro ao enviar e-mail via Brevo:', err);
     return {
       success: false,
-      error: err instanceof Error ? err.message : 'Falha ao enviar e-mail via Gmail.',
+      error: err instanceof Error ? err.message : 'Falha ao enviar e-mail via Brevo API.',
     };
   }
 }

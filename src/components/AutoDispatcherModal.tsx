@@ -70,21 +70,21 @@ export default function AutoDispatcherModal({
           {!isRunning && progress.current === 0 ? (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-blue-900 dark:text-blue-200 text-xs leading-relaxed space-y-2">
-                <div className="flex items-center gap-2 font-bold text-sm text-blue-700 dark:text-blue-400">
+                <div className="flex items-center gap-2 font-bold text-sm text-amber-700 dark:text-amber-400">
                   <Sparkles className="w-4 h-4" />
-                  <span>Pronto para iniciar prospecção em massa</span>
+                  <span>Disparo Comercial Bloqueado temporariamente</span>
                 </div>
                 <p>
                   O robô identificou <strong>{totalPending} empresa(s) nova(s)</strong> elegíveis para envio no estágio &quot;Novo&quot; com e-mail cadastrado.
                 </p>
-                <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80">
-                  Cada e-mail será enviado com intervalo de segurança (3 segundos) para proteger a reputação do seu Gmail e evitar bloqueios. O status no Kanban será avançado para <strong>Contato Enviado</strong> automaticamente.
+                <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                  O disparo comercial em lote está pausado na UI até a <strong>Etapa 10</strong> (onde o copywriting e sequências personalizadas serão ativados). Para testar a infraestrutura de envio e validar SPF/DKIM/DMARC com envio real, acesse <strong>Configurações &gt; E-mail</strong>.
                 </p>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-[11px] text-slate-600 dark:text-neutral-400 space-y-1">
                 <p className="font-semibold text-slate-700 dark:text-neutral-300">Remetente:</p>
-                <p className="font-mono text-slate-800 dark:text-neutral-200">Littera Educacional &lt;Configurado via GMAIL_USER&gt;</p>
+                <p className="font-mono text-slate-800 dark:text-neutral-200">Littera Educacional &lt;bruno@grupolittera.com.br&gt; (Brevo API)</p>
               </div>
             </div>
           ) : (
@@ -154,12 +154,13 @@ export default function AutoDispatcherModal({
               </button>
               <button
                 type="button"
-                disabled={totalPending === 0}
+                disabled={true}
                 onClick={onConfirm}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white shadow-sm shadow-blue-500/20 transition cursor-pointer"
+                title="Disparo comercial em lote temporariamente desabilitado até a Etapa 10"
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-300 dark:bg-neutral-800 opacity-60 cursor-not-allowed text-slate-500 dark:text-neutral-400 shadow-none"
               >
-                <Play className="w-4 h-4 fill-white" />
-                <span>Disparar para {totalPending} Leads</span>
+                <Play className="w-4 h-4 fill-current" />
+                <span>Pausado até Etapa 10</span>
               </button>
             </>
           ) : !isRunning && progress.current > 0 ? (

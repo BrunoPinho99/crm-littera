@@ -116,13 +116,40 @@ export interface Contato {
   atualizado_em: string;
 }
 
+export interface CaixaEnvio {
+  id: string;
+  email: string;
+  nome_remetente: string;
+  ativo: boolean;
+  limite_diario_inicial: number;
+  incremento_semanal: number;
+  limite_diario_maximo: number;
+  aquecimento_inicio: string;
+  enviados_hoje: number;
+  data_contador: string;
+  assinatura_html: string | null;
+  criado_em: string;
+}
+
+export interface Descadastro {
+  email: string;
+  escola_id: string | null;
+  contato_id: string | null;
+  motivo: string | null;
+  criado_em: string;
+}
+
 export interface Interacao {
   id: string;
-  escola_id: string;
+  escola_id: string | null;
   contato_id: string | null;
+  caixa_envio_id?: string | null;
   tipo: TipoInteracao;
   assunto: string | null;
   conteudo: string | null;
+  provedor_message_id?: string | null;
+  provedor_thread_id?: string | null;
+  rfc_message_id?: string | null;
   metadata: Record<string, unknown> | null;
   criado_em: string;
 }

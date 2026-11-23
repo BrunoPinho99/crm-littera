@@ -1,29 +1,13 @@
-import nodemailer from 'nodemailer';
-
-export const GMAIL_USER = process.env.GMAIL_USER || '';
-export const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
-
-export function getEmailTransporter() {
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: GMAIL_USER,
-      pass: GMAIL_APP_PASSWORD.replace(/\s+/g, ''), // remove espaços comuns em senhas de app
-    },
-  });
-}
-
+/**
+ * Gerador de conteúdo de e-mail comercial para leads escolares.
+ * NOTA: O copywriting completo e sequências multietapas serão aprofundados na Etapa 10.
+ */
 export function generateLeadEmailContent(lead: {
   nome_escola: string;
   nome_decisor?: string | null;
 }) {
   const schoolName = lead.nome_escola;
   const recipientName = lead.nome_decisor?.trim() ? lead.nome_decisor : 'Equipe Pedagógica / Direção';
-  const senderEmailDisplay = GMAIL_USER || 'contato@littera.com.br';
 
   const subject = `Inovação Pedagógica & Gestão Digital: Apresentação para ${schoolName}`;
 
@@ -39,7 +23,7 @@ Qual seria o melhor dia e horário para conversarmos?
 
 Atenciosamente,
 Equipe Littera Educacional
-${senderEmailDisplay} | Brasília - DF`;
+Brasília - DF`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6; max-width: 600px;">
@@ -57,7 +41,7 @@ ${senderEmailDisplay} | Brasília - DF`;
       <p style="margin-top: 16px; font-size: 14px; color: #475569;">
         <strong>Littera Educacional</strong><br />
         <span style="color: #2563eb; font-weight: 600;">Relacionamento Institucional</span><br />
-        <a href="mailto:${senderEmailDisplay}" style="color: #64748b; text-decoration: none;">${senderEmailDisplay}</a> | Brasília - DF
+        Brasília - DF
       </p>
     </div>
   `;

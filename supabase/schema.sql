@@ -163,11 +163,35 @@ CREATE POLICY "contatos_auth_policy"
     USING (public.is_usuario_autorizado())
     WITH CHECK (public.is_usuario_autorizado());
 
--- 5. Tabela de Interações (Jornada do Funil)
+-- 5. Tabela de Caixas de Envio (Etapa 9)
+CREATE TABLE IF NOT EXISTS public.caixas_envio (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT UNIQUE NOT NULL,
+    nome_remetente TEXT NOT NULL,
+    ativo BOOLEAN NOT NULL DEFAULT true,
+    limite_diario_inicial INT NOT NULL DEFAULT 10,
+    incremento_semanal INT NOT NULL DEFAULT 5,
+    limite_diario_maximo INT NOT NULL DEFAULT 50,
+    aquecimento_inicio DATE NOT NULL DEFAULT CURRENT_DATE,
+    enviados_hoje INT NOT NULL DEFAULT 0,
+    data_contador DATE NOT NULL DEFAULT CURRENT_DATE,
+    assinatura_html TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.caixas_envio ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "caixas_envio_auth_policy"
+    ON public.caixas_envio FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+-- 6. Tabela de Interações (Jornada do Funil)
 CREATE TABLE IF NOT EXISTS public.interacoes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    escola_id UUID NOT NULL REFERENCES public.escolas(id) ON DELETE CASCADE,
+    escola_id UUID REFERENCES public.escolas(id) ON DELETE CASCADE,
     contato_id UUID REFERENCES public.contatos(id) ON DELETE SET NULL,
+    caixa_envio_id UUID REFERENCES public.caixas_envio(id) ON DELETE SET NULL,
     tipo TEXT NOT NULL CHECK (tipo IN (
         'email_enviado',
         'email_respondido',
@@ -183,11 +207,17 @@ CREATE TABLE IF NOT EXISTS public.interacoes (
     )),
     assunto TEXT,
     conteudo TEXT,
+    provedor_message_id TEXT,
+    provedor_thread_id TEXT,
+    rfc_message_id TEXT,
     metadata JSONB,
     criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_interacoes_escola_criado_em ON public.interacoes (escola_id, criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_interacoes_provedor_thread_id ON public.interacoes (provedor_thread_id);
+CREATE INDEX IF NOT EXISTS idx_interacoes_rfc_message_id ON public.interacoes (rfc_message_id);
+CREATE INDEX IF NOT EXISTS idx_interacoes_caixa_envio_id ON public.interacoes (caixa_envio_id);
 
 ALTER TABLE public.interacoes ENABLE ROW LEVEL SECURITY;
 
@@ -195,6 +225,50 @@ CREATE POLICY "interacoes_auth_policy"
     ON public.interacoes FOR ALL TO authenticated
     USING (public.is_usuario_autorizado())
     WITH CHECK (public.is_usuario_autorizado());
+
+-- 7. Tabela de Descadastros (Etapa 9)
+CREATE TABLE IF NOT EXISTS public.descadastros (
+    email TEXT PRIMARY KEY,
+    escola_id UUID REFERENCES public.escolas(id) ON DELETE SET NULL,
+    contato_id UUID REFERENCES public.contatos(id) ON DELETE SET NULL,
+    motivo TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.descadastros ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "descadastros_auth_policy"
+    ON public.descadastros FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE OR REPLACE FUNCTION public.trg_processar_descadastro()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    IF NEW.contato_id IS NOT NULL THEN
+        UPDATE public.contatos
+        SET descadastrado = true, atualizado_em = now()
+        WHERE id = NEW.contato_id;
+    END IF;
+
+    IF NEW.email IS NOT NULL AND NEW.email <> '' THEN
+        UPDATE public.contatos
+        SET descadastrado = true, atualizado_em = now()
+        WHERE lower(trim(email)) = lower(trim(NEW.email));
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_after_insert_descadastro ON public.descadastros;
+CREATE TRIGGER trigger_after_insert_descadastro
+    AFTER INSERT ON public.descadastros
+    FOR EACH ROW
+    EXECUTE FUNCTION public.trg_processar_descadastro();
 
 -- 6. Tabela de Execuções Reais do Agente SDR
 CREATE TABLE IF NOT EXISTS public.agente_execucoes (
