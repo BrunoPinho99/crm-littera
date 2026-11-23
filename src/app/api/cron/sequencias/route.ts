@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executarMotorSequencias } from '@/lib/sequencias/motor';
+import { lerRespostasDasCaixas } from '@/lib/email/leitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,15 @@ export async function POST(request: NextRequest) {
     const limiteParam = url.searchParams.get('limite');
     const limite = limiteParam ? parseInt(limiteParam, 10) : undefined;
 
+    // 1. Lê e processa respostas das caixas PRIMEIRO para evitar follow-up indevido
+    let resultadoLeitor = { caixasLidas: 0, mensagensProcessadas: 0, erros: [] as Array<{ caixaEmail: string; erro: string }> };
+    try {
+      resultadoLeitor = await lerRespostasDasCaixas();
+    } catch (leitorErr) {
+      console.error('Erro na leitura de respostas das caixas:', leitorErr);
+    }
+
+    // 2. Executa o motor de sequências
     const resultado = await executarMotorSequencias({
       forcarJanela,
       limite,
@@ -48,6 +58,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      leitor: resultadoLeitor,
       ...resultado,
     });
   } catch (err) {

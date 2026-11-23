@@ -32,7 +32,8 @@ export type FonteContato =
   | 'snov' 
   | 'apollo' 
   | 'manual' 
-  | 'receita';
+  | 'receita'
+  | 'resposta';
 
 export type TipoInteracao = 
   | 'email_enviado' 
@@ -128,6 +129,9 @@ export interface CaixaEnvio {
   enviados_hoje: number;
   data_contador: string;
   assinatura_html: string | null;
+  ultimo_history_id?: string | null;
+  ultima_leitura_em?: string | null;
+  google_refresh_token?: string | null;
   criado_em: string;
 }
 
@@ -156,6 +160,7 @@ export interface Interacao {
 
 export interface EscolaComContatos extends Escola {
   contatos: Contato[];
+  respostas?: Resposta[];
 }
 
 export interface AgenteExecucao {
@@ -322,4 +327,50 @@ export interface LeadEscolar {
   ultima_interacao: string | null;
   precisa_revisao?: boolean;
   observacao_revisao?: string | null;
+}
+
+
+export type ClassificacaoResposta =
+  | 'interessado'
+  | 'mais_informacoes'
+  | 'agora_nao'
+  | 'indicou_outra_pessoa'
+  | 'sem_interesse'
+  | 'descadastro'
+  | 'resposta_automatica'
+  | 'bounce'
+  | 'outro';
+
+export interface Resposta {
+  id: string;
+  interacao_id: string | null;
+  inscricao_id: string | null;
+  escola_id: string;
+  contato_id: string | null;
+  caixa_envio_id?: string | null;
+  de_email: string;
+  assunto: string;
+  corpo_texto: string;
+  recebido_em: string;
+  provedor_message_id?: string | null;
+  provedor_thread_id?: string | null;
+  classificacao: ClassificacaoResposta;
+  confianca: number | null;
+  justificativa: string | null;
+  data_retorno: string | null;
+  indicado_nome: string | null;
+  indicado_email: string | null;
+  rascunho_resposta: string | null;
+  tratada: boolean;
+  criado_em: string;
+}
+
+export interface Lembrete {
+  id: string;
+  escola_id: string;
+  contato_id: string | null;
+  data: string;
+  texto: string;
+  concluido: boolean;
+  criado_em: string;
 }

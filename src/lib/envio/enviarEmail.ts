@@ -179,15 +179,17 @@ export async function enviarEmail(params: EnviarEmailParams): Promise<EnviarEmai
     throw new Error(`Falha no envio de e-mail via Brevo: ${errorMsg}`);
   }
 
-  // 6. Atualizar contadores na tabela caixas_envio
-  const novoEnviadosHoje = limite.deveResetarContador ? 1 : (caixa.enviados_hoje || 0) + 1;
-  await supabaseAdmin
-    .from('caixas_envio')
-    .update({
-      enviados_hoje: novoEnviadosHoje,
-      data_contador: limite.dataAtualStr,
-    })
-    .eq('id', caixa.id);
+  // 6. Atualizar contadores na tabela caixas_envio (apenas para envios de prospecção, não testes/notificações)
+  if (!isTeste) {
+    const novoEnviadosHoje = limite.deveResetarContador ? 1 : (caixa.enviados_hoje || 0) + 1;
+    await supabaseAdmin
+      .from('caixas_envio')
+      .update({
+        enviados_hoje: novoEnviadosHoje,
+        data_contador: limite.dataAtualStr,
+      })
+      .eq('id', caixa.id);
+  }
 
   // 7. Definir provedor_thread_id
   const provedorThreadId = emRespostaA?.threadId || brevoRes.rfcMessageId;

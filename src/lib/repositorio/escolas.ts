@@ -22,7 +22,8 @@ export async function getEscolasComContatos(): Promise<EscolaComContatos[]> {
     .from('escolas')
     .select(`
       *,
-      contatos (*)
+      contatos (*),
+      respostas (*)
     `)
     .order('score', { ascending: false, nullsFirst: false })
     .order('criado_em', { ascending: false });
@@ -41,7 +42,8 @@ export async function getEscolaById(id: string): Promise<EscolaComContatos | nul
     .from('escolas')
     .select(`
       *,
-      contatos (*)
+      contatos (*),
+      respostas (*)
     `)
     .eq('id', id)
     .single();

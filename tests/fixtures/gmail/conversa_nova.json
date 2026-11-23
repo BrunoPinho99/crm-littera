@@ -1,0 +1,17 @@
+{
+  "id": "msg_conversa_nova_002",
+  "threadId": "thread_nova_999",
+  "snippet": "Bruno, vi seu e-mail anterior sobre a correção de redações. Me mande mais detalhes por favor.",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Diretoria Alfa <carlos.silva@colegioalfa.com.br>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Sobre a plataforma Littera de redação" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:00:00 -0300" },
+      { "name": "Message-ID", "value": "<carlos-new-thread-002@mail.gmail.com>" }
+    ],
+    "body": {
+      "data": "QnJ1bm8sIHZpIHNldSBlLW1haWwgYW50ZXJpb3Igc29icmUgYSBjb3JyZcOnw6NvIGRlIHJlZGHDp8O1ZXMuIE1lIG1hbmRlIG1haXMgZGV0YWxoZXMgcG9yIGZhdm9yLg=="
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "msg_spam_newsletter_008",
+  "threadId": "thread_spam_008",
+  "snippet": "Confira as melhores promoções da Black Friday de software!",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Newsletter Tech <news@promosoftware.com.br>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Black Friday de Ferramentas SaaS" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:40:00 -0300" },
+      { "name": "Message-ID", "value": "<news-spam-008@promosoftware.com.br>" }
+    ],
+    "body": {
+      "data": "Q29uZ2F0dWxhdGlvbnMhIENvbmZpcmEgYXMgZGVzY29udG9zIGV4Y2x1c2l2b3MgZGEgQmxhY2sgRnJpZGF5Lg=="
+    }
+  }
+}

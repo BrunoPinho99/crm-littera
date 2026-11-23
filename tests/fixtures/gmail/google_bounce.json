@@ -1,0 +1,18 @@
+{
+  "id": "msg_bounce_004",
+  "threadId": "thread_bounce_004",
+  "snippet": "Delivery Status Notification (Failure) - Address not found",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Mail Delivery Subsystem <mailer-daemon@googlemail.com>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Delivery Status Notification (Failure)" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:20:00 -0300" },
+      { "name": "Message-ID", "value": "<google-bounce-004@mail.gmail.com>" },
+      { "name": "X-Failed-Recipients", "value": "decisor.invalido@colegiobeta.com.br" }
+    ],
+    "body": {
+      "data": "QWRkcmVzcyBub3QgZm91bmQ6IFlvdXIgbWVzc2FnZSB3YXNuJ3QgZGVsaXZlcmVkIHRvIGRlY2lzb3IuaW52YWxpZG9AY29sZWdpb2JldGEuY29tLmJyIGJlY2F1c2UgdGhlIGFkZHJlc3MgY291bGQgbm90IGJlIGZvdW5kLCBvciBpcyB1bmFibGUgdG8gcmVjZWl2ZSBtYWlsLg=="
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "msg_autoreply_005",
+  "threadId": "thread_autoreply_005",
+  "snippet": "Resposta automática: Estou de férias, retorno em 15/12/2026",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Diretora Maria <maria@colegiogama.com.br>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Resposta automática: Ausência temporária" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:25:00 -0300" },
+      { "name": "Message-ID", "value": "<maria-auto-005@mail.gmail.com>" },
+      { "name": "Auto-Submitted", "value": "auto-replied" },
+      { "name": "Precedence", "value": "auto_reply" }
+    ],
+    "body": {
+      "data": "RXN0b3UgZGUgZsOpcmlhcywgbWV1IHJldG9ybm8gc2Vyw6EgZW0gMTUvMTIvMjAyNi4gRW0gY2FzbyBkZSBlbWVyZ8OqbmNpYXMsIGNvbnRhdGUgYSBzZWNyZXRhcmlhLg=="
+    }
+  }
+}

@@ -28,7 +28,10 @@ import {
   Play,
   Pause,
   Square,
-  Clock
+  Clock,
+  MessageSquareCheck,
+  Send,
+  RotateCcw
 } from 'lucide-react';
 import { 
   addContatoAction, 
@@ -43,7 +46,12 @@ import {
   retomarInscricaoAction,
   encerrarInscricaoAction
 } from '@/actions/sequencias';
-import { SequenciaPasso, FilaEnvio } from '@/types/database';
+import {
+  getRespostasDaEscolaAction,
+  corrigirClassificacaoAction,
+  aprovarRascunhoRespostaAction
+} from '@/actions/respostas';
+import { SequenciaPasso, FilaEnvio, Resposta, ClassificacaoResposta } from '@/types/database';
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -182,7 +190,7 @@ export default function LeadModal({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dados' | 'contatos' | 'score' | 'sequencia'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'contatos' | 'score' | 'sequencia' | 'respostas'>('dados');
   const [verificandoId, setVerificandoId] = useState<string | null>(null);
   const [emailGeralStatus, setEmailGeralStatus] = useState<EmailStatus | undefined>(lead?.email_geral_status);
   const [emailGeralVerificadoEm, setEmailGeralVerificadoEm] = useState<string | null | undefined>(lead?.email_geral_verificado_em);
@@ -190,6 +198,11 @@ export default function LeadModal({
   const [inscricaoData, setInscricaoData] = useState<{ inscricao: any; passos: SequenciaPasso[]; fila: FilaEnvio[] } | null>(null);
   const [isLoadingSequencia, setIsLoadingSequencia] = useState(false);
   const [isSequenciaActionLoading, setIsSequenciaActionLoading] = useState(false);
+
+  const [respostasList, setRespostasList] = useState<Resposta[]>(lead?.respostas || []);
+  const [isLoadingRespostas, setIsLoadingRespostas] = useState(false);
+  const [draftTextMap, setDraftTextMap] = useState<Record<string, string>>({});
+  const [respostaActionLoadingId, setRespostaActionLoadingId] = useState<string | null>(null);
 
   const [prevTrack, setPrevTrack] = useState<{ lead?: EscolaComContatos | null; mode: string; isOpen: boolean }>({
     lead,
@@ -274,11 +287,80 @@ export default function LeadModal({
         .catch((err) => {
           console.error('Erro ao buscar dados da sequência no modal:', err);
         });
+
+      Promise.resolve().then(() => {
+        if (isMounted) setIsLoadingRespostas(true);
+      });
+      getRespostasDaEscolaAction(lead.id)
+        .then((respostas) => {
+          if (isMounted) {
+            setRespostasList(respostas);
+            const map: Record<string, string> = {};
+            respostas.forEach((r) => {
+              if (r.rascunho_resposta) map[r.id] = r.rascunho_resposta;
+            });
+            setDraftTextMap((prev) => ({ ...map, ...prev }));
+          }
+        })
+        .catch((err) => {
+          console.error('Erro ao carregar respostas:', err);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingRespostas(false);
+        });
     }
     return () => {
       isMounted = false;
     };
   }, [isOpen, lead?.id]);
+
+  const recarregarRespostas = async () => {
+    if (!lead?.id) return;
+    setIsLoadingRespostas(true);
+    try {
+      const data = await getRespostasDaEscolaAction(lead.id);
+      setRespostasList(data);
+      const map: Record<string, string> = {};
+      data.forEach((r) => {
+        if (r.rascunho_resposta) map[r.id] = r.rascunho_resposta;
+      });
+      setDraftTextMap((prev) => ({ ...map, ...prev }));
+    } catch (err) {
+      console.error('Erro ao recarregar respostas:', err);
+    } finally {
+      setIsLoadingRespostas(false);
+    }
+  };
+
+  const handleCorrigirClassificacao = async (respostaId: string, novaClassificacao: ClassificacaoResposta) => {
+    setRespostaActionLoadingId(respostaId);
+    try {
+      const res = await corrigirClassificacaoAction(respostaId, novaClassificacao);
+      if (res.success) {
+        await recarregarRespostas();
+      } else {
+        alert(`Erro ao corrigir classificação: ${res.error}`);
+      }
+    } finally {
+      setRespostaActionLoadingId(null);
+    }
+  };
+
+  const handleAprovarRascunho = async (respostaId: string) => {
+    setRespostaActionLoadingId(respostaId);
+    try {
+      const texto = draftTextMap[respostaId];
+      const res = await aprovarRascunhoRespostaAction(respostaId, texto);
+      if (res.success) {
+        alert('Resposta aprovada e enviada com sucesso!');
+        await recarregarRespostas();
+      } else {
+        alert(`Erro ao enviar resposta: ${res.error}`);
+      }
+    } finally {
+      setRespostaActionLoadingId(null);
+    }
+  };
 
   const handlePausarSequencia = async (inscricaoId: string) => {
     setIsSequenciaActionLoading(true);
@@ -589,6 +671,29 @@ export default function LeadModal({
                     : inscricaoData.inscricao.status}
                 </span>
               ) : null}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('respostas')}
+              className={`pb-2.5 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition ${
+                activeTab === 'respostas'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-neutral-300'
+              }`}
+            >
+              <MessageSquareCheck className="w-3.5 h-3.5" />
+              <span>Respostas Recebidas</span>
+              {respostasList.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold">
+                  {respostasList.length}
+                </span>
+              )}
+              {respostasList.some((r) => !r.tratada) && (
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-rose-600 text-white font-extrabold animate-pulse">
+                  Nova
+                </span>
+              )}
             </button>
           </div>
         )}
@@ -1481,6 +1586,202 @@ export default function LeadModal({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'respostas' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-neutral-800">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-neutral-100">
+                    Respostas Recebidas via Gmail
+                  </h3>
+                  <p className="text-xs text-slate-400 dark:text-neutral-500">
+                    Detectadas automaticamente, classificadas por IA com parada de sequência e rascunho de resposta pronto.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={recarregarRespostas}
+                  disabled={isLoadingRespostas}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-neutral-700 text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 transition text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Atualizar respostas"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isLoadingRespostas ? 'animate-spin' : ''}`} />
+                  <span>Atualizar</span>
+                </button>
+              </div>
+
+              {isLoadingRespostas ? (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 dark:text-neutral-500">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-2" />
+                  <p className="text-xs">Carregando respostas...</p>
+                </div>
+              ) : respostasList.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-neutral-800 rounded-2xl text-center p-6 text-slate-400 dark:text-neutral-500">
+                  <MessageSquareCheck className="w-10 h-10 mb-2 stroke-1 text-slate-300 dark:text-neutral-600" />
+                  <p className="text-xs font-semibold text-slate-700 dark:text-neutral-300">
+                    Nenhuma resposta registrada ainda
+                  </p>
+                  <p className="text-[11px] max-w-sm mt-1">
+                    A cada 10 minutos o sistema verifica as caixas de envio conectadas. Qualquer e-mail de decisor ou bounce aparecerá aqui automaticamente.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {respostasList.map((resp) => {
+                    const isAprovando = respostaActionLoadingId === resp.id;
+                    const rascunhoAtual = draftTextMap[resp.id] ?? (resp.rascunho_resposta || '');
+
+                    const rotulos: Record<ClassificacaoResposta, { label: string; badge: string }> = {
+                      interessado: { label: 'Interessado (Quer Reunião)', badge: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300' },
+                      mais_informacoes: { label: 'Mais Informações', badge: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300' },
+                      agora_nao: { label: 'Agora Não (Retorno Futuro)', badge: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300' },
+                      indicou_outra_pessoa: { label: 'Indicou Outra Pessoa', badge: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300' },
+                      sem_interesse: { label: 'Sem Interesse', badge: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-neutral-800 dark:text-neutral-300' },
+                      descadastro: { label: 'Descadastro', badge: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300' },
+                      resposta_automatica: { label: 'Resposta Automática', badge: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300' },
+                      bounce: { label: 'Bounce / Falha Entrega', badge: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300' },
+                      outro: { label: 'Outro (Atenção Manual)', badge: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-300' },
+                    };
+
+                    const badgeInfo = rotulos[resp.classificacao] || rotulos.outro;
+
+                    return (
+                      <div
+                        key={resp.id}
+                        className="p-4 rounded-xl border border-slate-200/80 dark:border-neutral-800 bg-white dark:bg-[#121215] space-y-3.5 shadow-2xs"
+                      >
+                        {/* Topo: Remetente, Data, Classificação */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-neutral-800/80 pb-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs text-slate-900 dark:text-neutral-100">
+                              De: {resp.de_email}
+                            </span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[10px] border ${badgeInfo.badge}`}>
+                              {badgeInfo.label}
+                            </span>
+                            {!resp.tratada && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-rose-600 text-white animate-pulse">
+                                Nova
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-slate-400 dark:text-neutral-500 font-mono">
+                            {new Date(resp.recebido_em).toLocaleString('pt-BR', {
+                              timeZone: 'America/Sao_Paulo',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+
+                        {/* Justificativa e Metadados da IA */}
+                        {resp.justificativa && (
+                          <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-neutral-900/60 border border-slate-200/60 dark:border-neutral-800 text-xs text-slate-700 dark:text-neutral-300">
+                            <span className="font-bold text-slate-900 dark:text-neutral-100 mr-1.5">
+                              Análise da IA:
+                            </span>
+                            <span>{resp.justificativa}</span>
+                            {resp.confianca && (
+                              <span className="ml-2 text-[10px] text-slate-400 font-mono">
+                                (confiança: {Math.round(resp.confianca * 100)}%)
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {resp.data_retorno && (
+                          <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                            ⏳ Previsão de retorno do contato: <strong>{resp.data_retorno}</strong>
+                          </div>
+                        )}
+
+                        {resp.indicado_email && (
+                          <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs text-purple-800 dark:text-purple-300">
+                            👤 Contato Indicado: <strong>{resp.indicado_nome || 'Decisor'}</strong> &lt;{resp.indicado_email}&gt;
+                          </div>
+                        )}
+
+                        {/* Texto da Resposta Recebida */}
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-neutral-400 uppercase tracking-wider block">
+                            Texto da Resposta (Sem Citações Antigas):
+                          </label>
+                          <div className="p-3 rounded-lg bg-slate-50 dark:bg-neutral-900/90 border border-slate-200 dark:border-neutral-800 font-sans text-xs text-slate-800 dark:text-neutral-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                            {resp.corpo_texto || '(Mensagem sem texto legível)'}
+                          </div>
+                        </div>
+
+                        {/* Ação de Corrigir Classificação */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-neutral-800/80">
+                          <span className="text-[11px] text-slate-500 font-semibold">
+                            Corrigir classificação:
+                          </span>
+                          <select
+                            disabled={isAprovando}
+                            value={resp.classificacao}
+                            onChange={(e) =>
+                              handleCorrigirClassificacao(resp.id, e.target.value as ClassificacaoResposta)
+                            }
+                            className="text-xs py-1 px-2.5 rounded-lg border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-slate-800 dark:text-neutral-200 cursor-pointer"
+                          >
+                            <option value="interessado">Interessado (Quer Reunião)</option>
+                            <option value="mais_informacoes">Mais Informações</option>
+                            <option value="agora_nao">Agora Não (Retorno Futuro)</option>
+                            <option value="indicou_outra_pessoa">Indicou Outra Pessoa</option>
+                            <option value="sem_interesse">Sem Interesse</option>
+                            <option value="descadastro">Descadastro</option>
+                            <option value="resposta_automatica">Resposta Automática</option>
+                            <option value="bounce">Bounce</option>
+                            <option value="outro">Outro</option>
+                          </select>
+                        </div>
+
+                        {/* Rascunho Sugerido de Resposta */}
+                        {resp.rascunho_resposta && (
+                          <div className="mt-3 p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/60 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                Sugestão de Resposta (Pronta para envio)
+                              </label>
+                              <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                                Requer sua aprovação antes de sair
+                              </span>
+                            </div>
+
+                            <textarea
+                              rows={4}
+                              value={rascunhoAtual}
+                              onChange={(e) =>
+                                setDraftTextMap((prev) => ({ ...prev, [resp.id]: e.target.value }))
+                              }
+                              placeholder="Edite o rascunho de resposta antes de enviar..."
+                              className="w-full text-xs p-2.5 rounded-lg border border-emerald-300 dark:border-emerald-800/80 bg-white dark:bg-neutral-900 text-slate-800 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                            />
+
+                            <div className="flex items-center justify-end">
+                              <button
+                                type="button"
+                                disabled={isAprovando}
+                                onClick={() => handleAprovarRascunho(resp.id)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>{isAprovando ? 'Enviando...' : 'Aprovar e Enviar'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

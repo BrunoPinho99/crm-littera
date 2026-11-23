@@ -1,0 +1,18 @@
+{
+  "id": "msg_indicacao_sem_email_007",
+  "threadId": "thread_indicacao_007",
+  "snippet": "Olá, fale com a coordenadora Marina sobre redação. Abraços",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Diretor João <joao@escola.com.br>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Re: Redação no Ensino Médio" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:35:00 -0300" },
+      { "name": "Message-ID", "value": "<joao-sem-email-007@mail.gmail.com>" },
+      { "name": "In-Reply-To", "value": "<toque1-joao@littera.app.br>" }
+    ],
+    "body": {
+      "data": "T2zDoSLCpyBmYWxlIGNvbSBhIGNvb3JkZW5hZG9yYSBNYXJpbmEgc29icmUgcmVkYcOnw6NvLiBBYnJhw6dvcy4="
+    }
+  }
+}

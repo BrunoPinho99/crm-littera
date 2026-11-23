@@ -1,0 +1,18 @@
+{
+  "id": "msg_citacao_003",
+  "threadId": "thread_abc_123",
+  "snippet": "Perfeito, vamos agendar uma call.",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "carlos.silva@colegioalfa.com.br" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Re: Redação no Colégio Alfa" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 11:15:00 -0300" },
+      { "name": "Message-ID", "value": "<carlos-reply-003@mail.gmail.com>" },
+      { "name": "In-Reply-To", "value": "<toque1@littera.app.br>" }
+    ],
+    "body": {
+      "data": "UGVyZmVpdG8sIHZhbW9zIGFnZW5kYXIgdW1hIGNhbGwuDQoNCkVtIDIwIGRlIG5vdiBkZSAyMDI2LCDDoHMgMTA6MDAsIEJydW5vIFBpbmhvIDxicnVub0BncnVwb2xpdHRlcmEuY29tLmJyPiBlc2NyZXZldToNCj4gT2zDoSBDYXJsb3MsIGEgTGl0dGVyYSBlbGltaW5hIG8gZ2FyZ2FsbyBvcGVyYWNpb25hbC..."
+    }
+  }
+}

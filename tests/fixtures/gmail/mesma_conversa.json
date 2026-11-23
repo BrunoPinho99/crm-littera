@@ -1,0 +1,19 @@
+{
+  "id": "msg_mesma_conversa_001",
+  "threadId": "thread_abc_123",
+  "snippet": "Olá Bruno, achei interessante a proposta. Podemos conversar na quinta?",
+  "payload": {
+    "headers": [
+      { "name": "From", "value": "Prof. Carlos Silva <carlos.silva@colegioalfa.com.br>" },
+      { "name": "To", "value": "bruno@grupolittera.com.br" },
+      { "name": "Subject", "value": "Re: Redação Nota 1000 no Ensino Médio do Colégio Alfa" },
+      { "name": "Date", "value": "Mon, 23 Nov 2026 10:30:00 -0300" },
+      { "name": "Message-ID", "value": "<carlos-reply-001@mail.gmail.com>" },
+      { "name": "In-Reply-To", "value": "<littera-rfc-toque1@littera.app.br>" },
+      { "name": "References", "value": "<littera-rfc-toque1@littera.app.br>" }
+    ],
+    "body": {
+      "data": "T2zDoSBCcnVubywgYWNoZWkgaW50ZXJlc3NhbnRlIGEgcHJvcG9zdGEuIFBvZGVtb3MgY29udmVyc2FyIG5hIHF1aW50YT8="
+    }
+  }
+}
