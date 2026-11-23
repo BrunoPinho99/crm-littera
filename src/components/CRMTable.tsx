@@ -17,6 +17,8 @@ import Sidebar from './Sidebar';
 import KanbanBoard from './KanbanBoard';
 import LeadModal from './LeadModal';
 import ScheduleMeetingModal from './ScheduleMeetingModal';
+import ModalPosReuniao from './ModalPosReuniao';
+import { Reuniao } from '@/types/database';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 import { pickLeadEmail, isLandline } from '@/lib/contact';
 import {
@@ -150,6 +152,10 @@ export default function CRMTable({
   // Estados do Modal de Google Agenda
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [scheduleLead, setScheduleLead] = useState<EscolaComContatos | null>(null);
+
+  // Estados do Modal de Pós-Reunião
+  const [isPosReuniaoOpen, setIsPosReuniaoOpen] = useState(false);
+  const [selectedReuniaoPos, setSelectedReuniaoPos] = useState<Reuniao | null>(null);
 
   // Estado de Inscrição em Lote na Sequência de E-mails
   const [isEnrollingBatch, setIsEnrollingBatch] = useState(false);
@@ -380,6 +386,7 @@ export default function CRMTable({
 
   const handleConfirmScheduled = async (leadId: string) => {
     await handleStatusChange(leadId, 'reuniao_agendada');
+    window.location.reload();
   };
 
   // Inscrição em Massa de Leads do Lote de Hoje na Sequência Padrão
@@ -731,6 +738,10 @@ export default function CRMTable({
             onEditLead={handleOpenEditModal}
             onDeleteLead={handleDeleteLead}
             onScheduleMeeting={handleOpenScheduleModal}
+            onOpenPosReuniao={(reuniao) => {
+              setSelectedReuniaoPos(reuniao);
+              setIsPosReuniaoOpen(true);
+            }}
             updatingId={updatingId}
           />
         ) : (
@@ -987,6 +998,17 @@ export default function CRMTable({
         onClose={() => setIsScheduleOpen(false)}
         lead={scheduleLead}
         onConfirmScheduled={handleConfirmScheduled}
+      />
+
+      {/* MODAL DE PÓS-REUNIÃO */}
+      <ModalPosReuniao
+        isOpen={isPosReuniaoOpen}
+        onClose={() => setIsPosReuniaoOpen(false)}
+        reuniao={selectedReuniaoPos}
+        onSuccess={() => {
+          setIsPosReuniaoOpen(false);
+          window.location.reload();
+        }}
       />
     </div>
   );

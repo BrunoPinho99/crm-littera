@@ -5,6 +5,7 @@ import { podeEnviarEmail } from '@/lib/envio/regrasEnvio';
 import { carregarFeriadosSet } from '@/actions/sequencias';
 import { estaNaJanelaDeEnvio, agendarProximoPasso } from './janelas';
 import { renderizarPasso } from './render';
+import { linkAgenda } from '@/lib/agendamento/link';
 import {
   Inscricao,
   SequenciaPasso,
@@ -299,7 +300,7 @@ export async function executarMotorSequencias(options?: {
             cidade: (escola as Escola).cidade || 'Brasília',
             cargo: contatoAlvo.cargo || 'Direção Pedagógica',
             gancho: (escola as Escola).gancho_personalizacao,
-            link_agenda: 'https://calendly.com/littera',
+            link_agenda: linkAgenda(escola as Escola, contatoAlvo),
             remetente: nomeRemetente,
           },
           usarIa: passo.usar_ia,

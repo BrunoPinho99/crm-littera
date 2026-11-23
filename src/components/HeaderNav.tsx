@@ -1,15 +1,36 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useTheme } from './ThemeProvider';
-import { Sun, Moon, ShieldCheck, LogOut } from 'lucide-react';
+import { Sun, Moon, ShieldCheck, LogOut, FileText } from 'lucide-react';
 import HeaderAgentStatus from './HeaderAgentStatus';
 import { createClient as createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { getContadorReunioesPendentesAction } from '@/actions/reunioes';
 
 export default function HeaderNav() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const [pendentesCount, setPendentesCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPendentes = () => {
+      getContadorReunioesPendentesAction()
+        .then((count) => {
+          if (isMounted) setPendentesCount(count);
+        })
+        .catch(() => {});
+    };
+
+    fetchPendentes();
+    const interval = setInterval(fetchPendentes, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -43,6 +64,18 @@ export default function HeaderNav() {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          {/* Alerta de Pós-Reunião Pendente de Registro */}
+          {pendentesCount > 0 && (
+            <Link
+              href="/reunioes?filtro=pendentes"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-300 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold text-xs animate-pulse hover:bg-purple-100 transition shadow-xs"
+              title="Existem reuniões com término há mais de 1h que precisam de registro pós-reunião"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>{pendentesCount} pós-reunião pendente{pendentesCount > 1 ? 's' : ''}</span>
+            </Link>
+          )}
+
           {/* Status Real do Agente SDR */}
           <HeaderAgentStatus />
 

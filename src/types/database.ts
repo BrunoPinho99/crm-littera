@@ -161,6 +161,7 @@ export interface Interacao {
 export interface EscolaComContatos extends Escola {
   contatos: Contato[];
   respostas?: Resposta[];
+  reunioes?: Reuniao[];
 }
 
 export interface AgenteExecucao {
@@ -373,4 +374,40 @@ export interface Lembrete {
   texto: string;
   concluido: boolean;
   criado_em: string;
+}
+
+export type StatusReuniao =
+  | 'agendada'
+  | 'remarcada'
+  | 'cancelada'
+  | 'realizada'
+  | 'nao_compareceu';
+
+export type ProvedorReuniao = 'calcom' | 'google' | 'manual';
+
+export type ResultadoReuniao =
+  | 'proposta_enviada'
+  | 'teste_gratuito'
+  | 'fechado'
+  | 'sem_fit'
+  | 'followup';
+
+export interface Reuniao {
+  id: string;
+  escola_id: string | null;
+  contato_id: string | null;
+  inscricao_id: string | null;
+  provedor: ProvedorReuniao;
+  provedor_evento_id: string | null;
+  inicio: string;
+  fim: string;
+  link_reuniao: string | null;
+  status: StatusReuniao;
+  resultado: ResultadoReuniao | null;
+  notas: string | null;
+  pendente_registro: boolean;
+  criado_em: string;
+  atualizado_em: string;
+  escolas?: Escola | null;
+  contatos?: Contato | null;
 }

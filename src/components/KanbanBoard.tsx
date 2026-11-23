@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { EscolaComContatos, StatusFunil, EmailStatus, ClassificacaoResposta } from '@/types/database';
+import { EscolaComContatos, StatusFunil, EmailStatus, ClassificacaoResposta, Reuniao } from '@/types/database';
 import { 
   MapPin, 
   Mail, 
@@ -21,7 +21,9 @@ import {
   HelpCircle,
   ListOrdered,
   Award,
-  ExternalLink
+  ExternalLink,
+  Video,
+  FileCheck
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
@@ -102,8 +104,24 @@ interface KanbanBoardProps {
   onEditLead: (lead: EscolaComContatos) => void;
   onDeleteLead: (leadId: string) => void;
   onScheduleMeeting?: (lead: EscolaComContatos) => void;
+  onOpenPosReuniao?: (reuniao: Reuniao) => void;
   updatingId: string | null;
   sortMode?: 'score_desc' | 'criado_em_desc';
+}
+
+function formatarDataHoraSP(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  } catch {
+    return iso;
+  }
 }
 
 const COLUMNS: {
@@ -209,6 +227,7 @@ export default function KanbanBoard({
   onEditLead,
   onDeleteLead,
   onScheduleMeeting,
+  onOpenPosReuniao,
   updatingId,
   sortMode = 'score_desc',
 }: KanbanBoardProps) {
@@ -240,6 +259,18 @@ export default function KanbanBoard({
     if (leadId) {
       const currentLead = leads.find((l) => l.id === leadId);
       if (currentLead && currentLead.status_funil !== targetStatus) {
+        // Se estiver movendo à mão para "Reunião Agendada", exige agendamento com data
+        if (targetStatus === 'reuniao_agendada') {
+          const temReuniaoAgendada = (currentLead.reunioes || []).some(
+            (r) => r.status === 'agendada' || r.status === 'remarcada'
+          );
+          if (!temReuniaoAgendada) {
+            if (onScheduleMeeting) {
+              onScheduleMeeting(currentLead);
+            }
+            return;
+          }
+        }
         onStatusChange(leadId, targetStatus, currentLead.status_funil);
       }
     }
@@ -502,6 +533,73 @@ export default function KanbanBoard({
                                 <p className="text-[9.5px] text-purple-800 dark:text-purple-300 font-medium mt-1 line-clamp-1">
                                   IA: {ultimaResposta.justificativa}
                                 </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Bloco de Reunião Agendada / Pós-Reunião */}
+                        {(() => {
+                          const reunioesList = lead.reunioes || [];
+                          if (reunioesList.length === 0 && lead.status_funil !== 'reuniao_agendada') return null;
+
+                          const reuniaoAtiva =
+                            reunioesList
+                              .filter((r) => r.status === 'agendada' || r.status === 'remarcada' || r.pendente_registro)
+                              .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())[0] ||
+                            reunioesList[0];
+
+                          if (!reuniaoAtiva && lead.status_funil !== 'reuniao_agendada') return null;
+
+                          return (
+                            <div className="mt-2 p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-[11px] space-y-1.5">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1 text-[10.5px]">
+                                  <Calendar className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                  {reuniaoAtiva
+                                    ? formatarDataHoraSP(reuniaoAtiva.inicio)
+                                    : 'Aguardando data'}
+                                </span>
+                                {reuniaoAtiva?.status && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                                    {reuniaoAtiva.status}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Botão Entrar com o Link da Reunião */}
+                              {reuniaoAtiva?.link_reuniao && (
+                                <div className="pt-0.5">
+                                  <a
+                                    href={reuniaoAtiva.link_reuniao}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white transition shadow-2xs"
+                                    title={reuniaoAtiva.link_reuniao}
+                                  >
+                                    <Video className="w-3 h-3" />
+                                    <span>Entrar na Reunião</span>
+                                    <ExternalLink className="w-2.5 h-2.5 opacity-80" />
+                                  </a>
+                                </div>
+                              )}
+
+                              {/* Aviso e Ação de Pós-Reunião Pendente */}
+                              {reuniaoAtiva?.pendente_registro && (
+                                <div className="pt-1 border-t border-amber-200/60 dark:border-amber-800/60">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenPosReuniao?.(reuniaoAtiva);
+                                    }}
+                                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white transition cursor-pointer shadow-2xs"
+                                  >
+                                    <FileCheck className="w-3 h-3" />
+                                    <span>Pós-Reunião Pendente • Registrar</span>
+                                  </button>
+                                </div>
                               )}
                             </div>
                           );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executarMotorSequencias } from '@/lib/sequencias/motor';
 import { lerRespostasDasCaixas } from '@/lib/email/leitor';
+import { marcarReunioesPendentesRegistro } from '@/lib/agendamento/posReuniao';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,16 @@ export async function POST(request: NextRequest) {
       console.error('Erro na leitura de respostas das caixas:', leitorErr);
     }
 
-    // 2. Executa o motor de sequências
+    // 2. Marca reuniões passadas há mais de 1 hora como pendentes de registro
+    let resultadoPosReuniao = { totalMarcadas: 0, erros: [] as string[] };
+    try {
+      const resPos = await marcarReunioesPendentesRegistro();
+      resultadoPosReuniao = { totalMarcadas: resPos.totalMarcadas, erros: resPos.erros };
+    } catch (posErr) {
+      console.error('Erro ao verificar reuniões passadas:', posErr);
+    }
+
+    // 3. Executa o motor de sequências
     const resultado = await executarMotorSequencias({
       forcarJanela,
       limite,
@@ -59,6 +69,7 @@ export async function POST(request: NextRequest) {
       success: true,
       timestamp: new Date().toISOString(),
       leitor: resultadoLeitor,
+      posReuniao: resultadoPosReuniao,
       ...resultado,
     });
   } catch (err) {

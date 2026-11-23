@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { EscolaComContatos } from '@/types/database';
 import { buildGoogleCalendarUrl } from '@/lib/googleCalendar';
-import { X, Calendar, Video, Mail, User, Building2, ExternalLink } from 'lucide-react';
+import { agendarReuniaoManualAction } from '@/actions/reunioes';
+import { X, Calendar, Video, Mail, User, Building2, ExternalLink, Link2 } from 'lucide-react';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export default function ScheduleMeetingModal({
 
   const [meetingDate, setMeetingDate] = useState(getDefaultDateTime());
   const [duration, setDuration] = useState(30);
+  const [linkReuniao, setLinkReuniao] = useState('');
   const [customTitle, setCustomTitle] = useState<string | null>(null);
   const [prevLeadId, setPrevLeadId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,16 +71,34 @@ export default function ScheduleMeetingModal({
       const gcalUrl = buildGoogleCalendarUrl({
         title: title || `Reunião Littera • ${schoolName}`,
         description,
-        location: 'Google Meet (videoconferência)',
+        location: linkReuniao.trim() || 'Google Meet (videoconferência)',
         startDateTime: meetingDate,
         durationMinutes: duration,
         attendeesEmails: attendeeEmail ? [attendeeEmail] : [],
       });
 
+      // 1. Grava no CRM via registrarReuniao (provedor 'manual')
+      const dInicio = new Date(meetingDate);
+      const dFim = new Date(dInicio.getTime() + duration * 60 * 1000);
+
+      const resManual = await agendarReuniaoManualAction({
+        escolaId: lead.id,
+        contatoId: principal?.id || null,
+        inicio: dInicio.toISOString(),
+        fim: dFim.toISOString(),
+        linkReuniao: linkReuniao.trim() || null,
+        notas: description,
+        titulo: title,
+      });
+
+      if (!resManual.sucesso) {
+        alert(`Erro ao registrar reunião: ${resManual.erro}`);
+        return;
+      }
+
       const win = window.open(gcalUrl, '_blank', 'noopener,noreferrer');
       if (!win) {
         alert('O navegador bloqueou a abertura do Google Agenda. Permita pop-ups para este site.');
-        return;
       }
 
       await onConfirmScheduled(lead.id);
@@ -191,9 +211,23 @@ export default function ScheduleMeetingModal({
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-neutral-300 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Link da Sala / Videoconferência (Opcional)</span>
+              </label>
+              <input
+                type="url"
+                value={linkReuniao}
+                onChange={(e) => setLinkReuniao(e.target.value)}
+                placeholder="https://meet.google.com/xyz ou deixe em branco"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs text-slate-900 dark:text-neutral-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+              />
+            </div>
+
             <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 flex items-center gap-2.5 text-xs text-blue-700 dark:text-blue-300">
               <Video className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-              <span>O Google Agenda incluirá automaticamente o link de videoconferência do Google Meet.</span>
+              <span>Gera o convite com Google Meet, atualiza a etapa no CRM e encerra a sequência automaticamente.</span>
             </div>
           </div>
         </div>

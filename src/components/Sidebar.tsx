@@ -16,13 +16,15 @@ import {
   ListOrdered,
   Inbox,
   Play,
-  Calendar
+  Calendar,
+  Video
 } from 'lucide-react';
 import Link from 'next/link';
 import MascotAgent from './MascotAgent';
 import { getLastAgentExecution } from '@/actions/leads';
 import { getContadorFilaAction } from '@/actions/sequencias';
 import { getContadoresRespostasELembretesAction } from '@/actions/respostas';
+import { getContadorReunioesPendentesAction } from '@/actions/reunioes';
 import { AgenteExecucao } from '@/types/database';
 import RodarAgenteModal from './RodarAgenteModal';
 
@@ -61,6 +63,7 @@ export default function Sidebar({
   const [pendingApprovals, setPendingApprovals] = useState<number>(0);
   const [respostasNovasCount, setRespostasNovasCount] = useState<number>(0);
   const [lembretesCount, setLembretesCount] = useState<number>(0);
+  const [reunioesPendentesCount, setReunioesPendentesCount] = useState<number>(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +92,12 @@ export default function Sidebar({
             setRespostasNovasCount(counts.respostasNovas);
             setLembretesCount(counts.lembretesPendentes);
           }
+        })
+        .catch(() => {});
+
+      getContadorReunioesPendentesAction()
+        .then((count) => {
+          if (isMounted) setReunioesPendentesCount(count);
         })
         .catch(() => {});
     };
@@ -276,6 +285,33 @@ export default function Sidebar({
                   ) : (
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-200/70 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400">
                       0
+                    </span>
+                  )}
+                </div>
+              )}
+            </Link>
+
+            <Link
+              href="/reunioes"
+              className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900/60 hover:text-slate-900 dark:hover:text-neutral-200 transition cursor-pointer"
+              title="Reuniões Agendadas, Realizadas e Pós-Reunião"
+            >
+              <div className="w-6 flex justify-center shrink-0 relative">
+                <Video className="w-4 h-4" />
+                {reunioesPendentesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+                )}
+              </div>
+              {isOpen && (
+                <div className="flex-1 flex items-center justify-between min-w-0">
+                  <span className="truncate">Reuniões</span>
+                  {reunioesPendentesCount > 0 ? (
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                      {reunioesPendentesCount} pendente{reunioesPendentesCount > 1 ? 's' : ''}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-slate-200/70 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400">
+                      Agenda
                     </span>
                   )}
                 </div>
