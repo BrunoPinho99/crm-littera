@@ -425,6 +425,135 @@ CREATE INDEX IF NOT EXISTS idx_escolas_entregue_lote_id ON public.escolas (entre
 CREATE INDEX IF NOT EXISTS idx_escolas_entregue_em ON public.escolas (entregue_em);
 CREATE INDEX IF NOT EXISTS idx_lotes_diarios_data ON public.lotes_diarios (data);
 
+-- 12. Tabelas do Motor de Sequência de E-mails (Etapa 10)
+CREATE TABLE IF NOT EXISTS public.sequencias (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome TEXT NOT NULL,
+    ativa BOOLEAN NOT NULL DEFAULT true,
+    modo_aprovacao BOOLEAN NOT NULL DEFAULT true,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.sequencias ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "sequencias_auth_policy"
+    ON public.sequencias FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE TABLE IF NOT EXISTS public.sequencia_passos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sequencia_id UUID NOT NULL REFERENCES public.sequencias(id) ON DELETE CASCADE,
+    ordem INT NOT NULL,
+    dias_apos_anterior INT NOT NULL DEFAULT 0,
+    tipo TEXT NOT NULL CHECK (tipo IN ('email_novo', 'email_resposta', 'email_outro_contato')),
+    assunto_template TEXT NOT NULL,
+    corpo_template TEXT NOT NULL,
+    usar_ia BOOLEAN NOT NULL DEFAULT false,
+    ativo BOOLEAN NOT NULL DEFAULT true,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_sequencia_passos_ordem UNIQUE (sequencia_id, ordem)
+);
+
+ALTER TABLE public.sequencia_passos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "sequencia_passos_auth_policy"
+    ON public.sequencia_passos FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE TABLE IF NOT EXISTS public.inscricoes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    escola_id UUID NOT NULL REFERENCES public.escolas(id) ON DELETE CASCADE,
+    contato_id UUID REFERENCES public.contatos(id) ON DELETE SET NULL,
+    sequencia_id UUID NOT NULL REFERENCES public.sequencias(id) ON DELETE RESTRICT,
+    caixa_envio_id UUID REFERENCES public.caixas_envio(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN (
+        'ativa',
+        'pausada',
+        'concluida',
+        'respondida',
+        'reuniao',
+        'cancelada',
+        'bounce',
+        'descadastrada'
+    )),
+    passo_atual INT NOT NULL DEFAULT 0,
+    proximo_envio_em TIMESTAMPTZ,
+    thread_id TEXT,
+    rfc_message_id_inicial TEXT,
+    ultimo_rfc_message_id TEXT,
+    motivo_fim TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inscricoes_escola_ativa
+    ON public.inscricoes (escola_id)
+    WHERE status IN ('ativa', 'pausada');
+
+CREATE INDEX IF NOT EXISTS idx_inscricoes_proximo_envio
+    ON public.inscricoes (status, proximo_envio_em)
+    WHERE status = 'ativa';
+
+ALTER TABLE public.inscricoes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "inscricoes_auth_policy"
+    ON public.inscricoes FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+DROP TRIGGER IF EXISTS trigger_inscricoes_atualizado_em ON public.inscricoes;
+CREATE TRIGGER trigger_inscricoes_atualizado_em
+    BEFORE UPDATE ON public.inscricoes
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_atualizado_em();
+
+CREATE TABLE IF NOT EXISTS public.fila_envios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inscricao_id UUID NOT NULL REFERENCES public.inscricoes(id) ON DELETE CASCADE,
+    passo_id UUID REFERENCES public.sequencia_passos(id) ON DELETE SET NULL,
+    contato_id UUID REFERENCES public.contatos(id) ON DELETE SET NULL,
+    para TEXT NOT NULL,
+    assunto TEXT NOT NULL,
+    corpo_html TEXT NOT NULL,
+    corpo_texto TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'aguardando_aprovacao' CHECK (status IN (
+        'aguardando_aprovacao',
+        'aprovado',
+        'enviado',
+        'erro',
+        'descartado'
+    )),
+    agendado_para TIMESTAMPTZ NOT NULL,
+    enviado_em TIMESTAMPTZ,
+    erro TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fila_envios_status_agendado
+    ON public.fila_envios (status, agendado_para);
+
+ALTER TABLE public.fila_envios ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "fila_envios_auth_policy"
+    ON public.fila_envios FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
+CREATE TABLE IF NOT EXISTS public.feriados (
+    data DATE PRIMARY KEY,
+    nome TEXT NOT NULL,
+    abrangencia TEXT NOT NULL CHECK (abrangencia IN ('nacional', 'distrital', 'estadual'))
+);
+
+ALTER TABLE public.feriados ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "feriados_auth_policy"
+    ON public.feriados FOR ALL TO authenticated
+    USING (public.is_usuario_autorizado())
+    WITH CHECK (public.is_usuario_autorizado());
+
 
 
 

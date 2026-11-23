@@ -6,15 +6,17 @@ import {
   updateLeadStatus, 
   createLead, 
   updateLead, 
-  deleteLead, 
-  sendLeadEmailDirect 
+  deleteLead 
 } from '@/actions/leads';
+import { 
+  iniciarSequencia, 
+  iniciarSequenciaLoteHojeAction 
+} from '@/actions/sequencias';
 import MascotAgent, { MascotMode } from './MascotAgent';
 import Sidebar from './Sidebar';
 import KanbanBoard from './KanbanBoard';
 import LeadModal from './LeadModal';
 import ScheduleMeetingModal from './ScheduleMeetingModal';
-import AutoDispatcherModal from './AutoDispatcherModal';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 import { pickLeadEmail, isLandline } from '@/lib/contact';
 import {
@@ -149,16 +151,8 @@ export default function CRMTable({
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [scheduleLead, setScheduleLead] = useState<EscolaComContatos | null>(null);
 
-  // Estados da Automação de Disparo de E-mails
-  const [isAutoDispatcherOpen, setIsAutoDispatcherOpen] = useState(false);
-  const [isAutoDispatching, setIsAutoDispatching] = useState(false);
-  const [dispatchProgress, setDispatchProgress] = useState({
-    current: 0,
-    total: 0,
-    currentSchool: '',
-    successCount: 0,
-    errorCount: 0,
-  });
+  // Estado de Inscrição em Lote na Sequência de E-mails
+  const [isEnrollingBatch, setIsEnrollingBatch] = useState(false);
 
   // Curadoria SDR baseada em score e qualificação real no banco
   const curatedCount = useMemo(() => {
@@ -316,27 +310,37 @@ export default function CRMTable({
     setUpdatingId(null);
   };
 
-  // Envio de E-mail
-  const handleSendEmail = async (lead: EscolaComContatos) => {
+  // Iniciar Sequência de E-mails Individual (5 Toques)
+  const handleIniciarSequencia = async (lead: EscolaComContatos) => {
     const emailToUse = pickLeadEmail(lead);
     if (!emailToUse) {
-      alert('Esta escola não possui nenhum e-mail válido cadastrado.');
+      alert('Esta escola não possui nenhum e-mail válido cadastrado para iniciar a sequência.');
       return;
     }
 
+    if (lead.status_funil === 'em_sequencia') {
+      alert('Esta escola já está com uma sequência em andamento.');
+      return;
+    }
+
+    const confirmar = confirm(
+      `Deseja inscrever a escola "${lead.nome}" na Sequência de E-mails (5 Toques em 14 dias)?\n\nO primeiro envio será programado na próxima janela comercial útil de Brasília.`
+    );
+    if (!confirmar) return;
+
     setUpdatingId(lead.id);
-    const res = await sendLeadEmailDirect(lead.id);
+    const res = await iniciarSequencia(lead.id);
     if (res.success) {
-      alert(res.message || 'E-mail enviado com sucesso!');
+      alert(`Sequência iniciada com sucesso para ${lead.nome}! O e-mail foi enfileirado para envio.`);
       setLeads((prev) =>
         prev.map((item) =>
           item.id === lead.id
-            ? { ...item, status_funil: 'contato_enviado', ultima_interacao: new Date().toISOString() }
+            ? { ...item, status_funil: 'em_sequencia', ultima_interacao: new Date().toISOString() }
             : item
         )
       );
     } else {
-      alert(`Erro ao enviar e-mail: ${res.error || res.message}`);
+      alert(`Não foi possível iniciar a sequência: ${res.error}`);
     }
     setUpdatingId(null);
   };
@@ -378,71 +382,31 @@ export default function CRMTable({
     await handleStatusChange(leadId, 'reuniao_agendada');
   };
 
-  // Automação em Massa de Disparo de E-mails (reativado na Etapa 10)
-  const handleOpenAutoDispatcher = () => {
-    const eligibleLeads = leads.filter(
-      (l) => l.status_funil === 'novo' && Boolean(pickLeadEmail(l))
+  // Inscrição em Massa de Leads do Lote de Hoje na Sequência Padrão
+  const handleIniciarSequenciaLoteHoje = async () => {
+    const confirmar = confirm(
+      'Deseja inscrever todas as escolas qualificadas do lote de hoje na Sequência de E-mails?\n\nOs disparos respeitarão as janelas comerciais de Brasília e o modo de aprovação configurado.'
     );
-    setDispatchProgress({
-      current: 0,
-      total: eligibleLeads.length,
-      currentSchool: '',
-      successCount: 0,
-      errorCount: 0,
-    });
-    setIsAutoDispatcherOpen(true);
-  };
+    if (!confirmar) return;
 
-  const handleStartAutoDispatch = async () => {
-    const eligibleLeads = leads.filter(
-      (l) => l.status_funil === 'novo' && Boolean(pickLeadEmail(l))
-    );
-
-    if (eligibleLeads.length === 0) return;
-
-    setIsAutoDispatching(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (let i = 0; i < eligibleLeads.length; i++) {
-      const currentLead = eligibleLeads[i];
-      setDispatchProgress((prev) => ({
-        ...prev,
-        current: i + 1,
-        currentSchool: currentLead.nome,
-      }));
-
-      try {
-        const res = await sendLeadEmailDirect(currentLead.id);
-        if (res.success) {
-          successCount++;
-          setLeads((prev) =>
-            prev.map((item) =>
-              item.id === currentLead.id
-                ? { ...item, status_funil: 'contato_enviado', ultima_interacao: new Date().toISOString() }
-                : item
-            )
-          );
-        } else {
-          errorCount++;
-        }
-      } catch (err) {
-        console.error(`Erro ao disparar para ${currentLead.nome}:`, err);
-        errorCount++;
+    setIsEnrollingBatch(true);
+    try {
+      const res = await iniciarSequenciaLoteHojeAction();
+      if (res.success) {
+        alert(
+          `Inscrição concluída!\n${res.totalInscritos} escola(s) inscrita(s) com sucesso na sequência.` +
+            (res.erros && res.erros.length > 0 ? `\n\nAvisos:\n${res.erros.slice(0, 3).join('\n')}` : '')
+        );
+        window.location.reload();
+      } else {
+        alert(`Erro na inscrição do lote: ${res.erros?.[0] || 'Falha desconhecida.'}`);
       }
-
-      setDispatchProgress((prev) => ({
-        ...prev,
-        successCount,
-        errorCount,
-      }));
-
-      if (i < eligibleLeads.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-      }
+    } catch (err) {
+      console.error('Erro na ação de inscrição em lote:', err);
+      alert('Erro inesperado ao inscrever lote de hoje.');
+    } finally {
+      setIsEnrollingBatch(false);
     }
-
-    setIsAutoDispatching(false);
   };
 
   const renderBadge = (status: StatusFunil) => {
@@ -560,15 +524,15 @@ export default function CRMTable({
           </div>
 
           <div className="flex items-center gap-3 shrink-0 flex-wrap md:flex-nowrap">
-            {/* Botão de Disparo em Massa (Desativado até a Etapa 10) */}
+            {/* Botão de Inscrição em Massa na Sequência (Etapa 10) */}
             <button
-              disabled={true}
-              onClick={handleOpenAutoDispatcher}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-neutral-800 text-slate-400 dark:text-neutral-500 cursor-not-allowed opacity-60 shadow-xs transition"
-              title="Será reativado na Etapa 10 com a sequência automática"
+              disabled={isEnrollingBatch}
+              onClick={handleIniciarSequenciaLoteHoje}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 shadow-xs transition cursor-pointer disabled:opacity-50"
+              title="Inscreve todas as escolas qualificadas entregues hoje na sequência de 5 toques"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Automação de E-mails</span>
+              <span>{isEnrollingBatch ? 'Inscrevendo Lote...' : 'Iniciar Sequência (Leads de Hoje)'}</span>
             </button>
 
             {/* Botão Cadastrar Escola */}
@@ -762,7 +726,7 @@ export default function CRMTable({
             leads={filteredLeads}
             sortMode={sortMode}
             onStatusChange={handleStatusChange}
-            onSendEmail={handleSendEmail}
+            onSendEmail={handleIniciarSequencia}
             onSendWhatsApp={handleSendWhatsApp}
             onEditLead={handleOpenEditModal}
             onDeleteLead={handleDeleteLead}
@@ -950,11 +914,20 @@ export default function CRMTable({
                                   </button>
                                 )}
 
-                                {/* Botão E-mail (Desativado até Etapa 10) */}
+                                {/* Iniciar Sequência de E-mails (5 Toques) */}
                                 <button
-                                  disabled={true}
-                                  className="p-1.5 rounded-lg border border-slate-200/60 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-60"
-                                  title="Será reativado na Etapa 10 com a sequência automática"
+                                  onClick={() => handleIniciarSequencia(lead)}
+                                  disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
+                                  className={`p-1.5 rounded-lg border transition ${
+                                    lead.status_funil === 'em_sequencia'
+                                      ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
+                                      : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer'
+                                  }`}
+                                  title={
+                                    lead.status_funil === 'em_sequencia'
+                                      ? 'Sequência já em andamento'
+                                      : 'Iniciar Sequência de E-mails (5 toques)'
+                                  }
                                 >
                                   <Mail className="w-3.5 h-3.5" />
                                 </button>
@@ -1014,16 +987,6 @@ export default function CRMTable({
         onClose={() => setIsScheduleOpen(false)}
         lead={scheduleLead}
         onConfirmScheduled={handleConfirmScheduled}
-      />
-
-      {/* MODAL DE AUTOMAÇÃO DE DISPAROS DE E-MAILS */}
-      <AutoDispatcherModal
-        isOpen={isAutoDispatcherOpen}
-        onClose={() => setIsAutoDispatcherOpen(false)}
-        onConfirm={handleStartAutoDispatch}
-        isRunning={isAutoDispatching}
-        totalPending={leads.filter((l) => l.status_funil === 'novo' && Boolean(pickLeadEmail(l))).length}
-        progress={dispatchProgress}
       />
     </div>
   );

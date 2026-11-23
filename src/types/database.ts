@@ -227,6 +227,85 @@ export interface ScoreDetalhes {
   criterios: ScoreCriterio[];
 }
 
+export type TipoPassoSequencia = 'email_novo' | 'email_resposta' | 'email_outro_contato';
+
+export type StatusInscricao =
+  | 'ativa'
+  | 'pausada'
+  | 'concluida'
+  | 'respondida'
+  | 'reuniao'
+  | 'cancelada'
+  | 'bounce'
+  | 'descadastrada';
+
+export type StatusFilaEnvio =
+  | 'aguardando_aprovacao'
+  | 'aprovado'
+  | 'enviado'
+  | 'erro'
+  | 'descartado';
+
+export interface Sequencia {
+  id: string;
+  nome: string;
+  ativa: boolean;
+  modo_aprovacao: boolean;
+  criado_em: string;
+}
+
+export interface SequenciaPasso {
+  id: string;
+  sequencia_id: string;
+  ordem: number;
+  dias_apos_anterior: number;
+  tipo: TipoPassoSequencia;
+  assunto_template: string;
+  corpo_template: string;
+  usar_ia: boolean;
+  ativo: boolean;
+  criado_em: string;
+}
+
+export interface Inscricao {
+  id: string;
+  escola_id: string;
+  contato_id: string | null;
+  sequencia_id: string;
+  caixa_envio_id: string | null;
+  status: StatusInscricao;
+  passo_atual: number;
+  proximo_envio_em: string | null;
+  thread_id: string | null;
+  rfc_message_id_inicial: string | null;
+  ultimo_rfc_message_id: string | null;
+  motivo_fim: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+export interface FilaEnvio {
+  id: string;
+  inscricao_id: string;
+  passo_id: string | null;
+  contato_id: string | null;
+  para: string;
+  assunto: string;
+  corpo_html: string;
+  corpo_texto: string;
+  status: StatusFilaEnvio;
+  agendado_para: string;
+  enviado_em: string | null;
+  erro: string | null;
+  criado_em: string;
+}
+
+export interface Feriado {
+  data: string;
+  nome: string;
+  abrangencia: 'nacional' | 'distrital' | 'estadual';
+}
+
 /**
  * Interface legada para compatibilidade de tipos transitórios
  */

@@ -161,7 +161,6 @@ export default function KanbanBoard({
   updatingId,
   sortMode = 'score_desc',
 }: KanbanBoardProps) {
-  void onSendEmail;
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<StatusFunil | null>(null);
 
@@ -418,12 +417,21 @@ export default function KanbanBoard({
                       {/* Rodapé do Card: Ações de Contato e Avanço de Status */}
                       <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 flex items-center justify-between gap-1.5">
                         <div className="flex items-center gap-1">
-                          {/* Botão de Envio de E-mail (Desativado até a Etapa 10) */}
+                          {/* Botão de Iniciar Sequência de E-mails */}
                           <button
                             type="button"
-                            disabled={true}
-                            className="p-1.5 rounded-lg border border-slate-200/60 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-60"
-                            title="Será reativado na Etapa 10 com a sequência automática"
+                            onClick={() => onSendEmail(lead)}
+                            disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
+                            className={`p-1.5 rounded-lg border transition ${
+                              lead.status_funil === 'em_sequencia'
+                                ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
+                                : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer'
+                            }`}
+                            title={
+                              lead.status_funil === 'em_sequencia'
+                                ? 'Sequência já em andamento'
+                                : 'Iniciar Sequência de E-mails (5 toques)'
+                            }
                           >
                             <Mail className="w-3.5 h-3.5" />
                           </button>
