@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient as createBrowserSupabaseClient } from '@/lib/supabase/client';
-import { Mail, ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { Mail, ArrowRight, CheckCircle2, AlertCircle, Loader2, Sparkles, Lock, Key } from 'lucide-react';
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const [modo, setModo] = useState<'senha' | 'magic_link'>('senha');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -17,6 +20,44 @@ function LoginForm() {
     : null;
 
   const errorMessage = customError || urlError;
+
+  const handleLoginSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomError(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setCustomError('Por favor, informe um endereço de e-mail válido.');
+      return;
+    }
+
+    if (!password) {
+      setCustomError('Por favor, informe sua senha.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error) {
+        setCustomError(error.message);
+      } else {
+        router.push('/');
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao processar login';
+      setCustomError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSendMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +98,7 @@ function LoginForm() {
   return (
     <div className="w-full max-w-md bg-white dark:bg-[#121215] border border-slate-200/90 dark:border-neutral-800 rounded-2xl shadow-xl p-8 backdrop-blur-sm">
       {/* Cabeçalho */}
-      <div className="flex flex-col items-center text-center mb-8">
+      <div className="flex flex-col items-center text-center mb-6">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-bold text-white text-xl shadow-lg shadow-blue-500/25 mb-4">
           L
         </div>
@@ -67,6 +108,40 @@ function LoginForm() {
         <p className="text-xs text-slate-500 dark:text-neutral-400 mt-1">
           Acesso restrito para operadores autorizados
         </p>
+      </div>
+
+      {/* Seletor de Modo: Senha vs Link Mágico */}
+      <div className="flex rounded-xl bg-slate-100 dark:bg-neutral-900 p-1 mb-6 border border-slate-200/60 dark:border-neutral-800">
+        <button
+          type="button"
+          onClick={() => {
+            setModo('senha');
+            setCustomError(null);
+          }}
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            modo === 'senha'
+              ? 'bg-white dark:bg-neutral-800 text-slate-900 dark:text-neutral-100 shadow-xs'
+              : 'text-slate-500 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200'
+          }`}
+        >
+          <Key className="w-3.5 h-3.5" />
+          <span>Senha</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setModo('magic_link');
+            setCustomError(null);
+          }}
+          className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            modo === 'magic_link'
+              ? 'bg-white dark:bg-neutral-800 text-slate-900 dark:text-neutral-100 shadow-xs'
+              : 'text-slate-500 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200'
+          }`}
+        >
+          <Mail className="w-3.5 h-3.5" />
+          <span>Link Mágico</span>
+        </button>
       </div>
 
       {/* Alerta de Erro */}
@@ -80,8 +155,8 @@ function LoginForm() {
         </div>
       )}
 
-      {/* Tela de Sucesso */}
-      {success ? (
+      {/* Tela de Sucesso do Link Mágico */}
+      {success && modo === 'magic_link' ? (
         <div className="text-center py-4 space-y-4 animate-in fade-in duration-300">
           <div className="w-12 h-12 mx-auto rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
             <CheckCircle2 className="w-6 h-6" />
@@ -107,15 +182,15 @@ function LoginForm() {
             Tentar outro e-mail
           </button>
         </div>
-      ) : (
-        /* Formulário de Envio */
-        <form onSubmit={handleSendMagicLink} className="space-y-4">
+      ) : modo === 'senha' ? (
+        /* Formulário de Login com Senha */
+        <form onSubmit={handleLoginSenha} className="space-y-4">
           <div>
             <label
               htmlFor="email"
               className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-2"
             >
-              E-mail corporativo autorizado
+              E-mail de administrador
             </label>
             <div className="relative">
               <input
@@ -124,14 +199,84 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nome@littera.com.br"
+                placeholder="bruno.pinho.brasilia@hotmail.com"
+                disabled={loading}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/60 text-slate-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:opacity-50"
+              />
+              <Mail className="w-4 h-4 text-slate-400 dark:text-neutral-500 absolute left-3.5 top-3" />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-2"
+            >
+              Senha
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••"
+                disabled={loading}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/60 text-slate-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:opacity-50"
+              />
+              <Lock className="w-4 h-4 text-slate-400 dark:text-neutral-500 absolute left-3.5 top-3" />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-sm shadow-md shadow-blue-500/20 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Entrando...</span>
+              </>
+            ) : (
+              <>
+                <span>Entrar no CRM</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+
+          <div className="pt-4 border-t border-slate-100 dark:border-neutral-800/80 flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-neutral-400">
+            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+            <span>Autenticação protegida por Supabase Auth & RLS</span>
+          </div>
+        </form>
+      ) : (
+        /* Formulário de Link Mágico */
+        <form onSubmit={handleSendMagicLink} className="space-y-4">
+          <div>
+            <label
+              htmlFor="email-magic"
+              className="block text-xs font-semibold text-slate-700 dark:text-neutral-300 mb-2"
+            >
+              E-mail corporativo autorizado
+            </label>
+            <div className="relative">
+              <input
+                id="email-magic"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="bruno.pinho.brasilia@hotmail.com"
                 disabled={loading}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/60 text-slate-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition disabled:opacity-50"
               />
               <Mail className="w-4 h-4 text-slate-400 dark:text-neutral-500 absolute left-3.5 top-3" />
             </div>
             <p className="text-[11px] text-slate-500 dark:text-neutral-400 mt-1.5">
-              Não é necessária senha. Você receberá um link temporário seguro.
+              Não é necessária senha. Você receberá um link temporário seguro no e-mail.
             </p>
           </div>
 
