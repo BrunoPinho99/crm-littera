@@ -478,7 +478,7 @@ export default function CRMTable({
       />
 
       {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 p-6 md:p-8 overflow-x-hidden space-y-6">
+      <main className="flex-1 min-w-0 p-6 md:p-8 overflow-y-auto overflow-x-hidden space-y-6">
         {agentMode === 'working' && (
           <div className="relative overflow-hidden rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-gradient-to-r from-emerald-50/90 dark:from-emerald-950/30 via-white dark:via-neutral-900/60 to-teal-50/60 dark:to-teal-950/20 p-4 md:p-5 shadow-xs transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
