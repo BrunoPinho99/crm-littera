@@ -408,6 +408,10 @@ export default function KanbanBoard({
                     const contatos = lead.contatos || [];
                     const contatoPrincipal = contatos.find((c) => c.principal) || contatos[0];
                     const outrosContatosCount = contatos.length > 1 ? contatos.length - 1 : 0;
+                    const emailDisponivel = contatoPrincipal?.email || lead.email_geral || contatos.find((c) => Boolean(c.email))?.email;
+                    const hasEmail = Boolean(emailDisponivel);
+                    const telefoneDisponivel = lead.telefone || contatoPrincipal?.telefone || contatos.find((c) => Boolean(c.telefone))?.telefone;
+                    const hasPhone = Boolean(telefoneDisponivel);
 
                     return (
                       <div
@@ -439,10 +443,10 @@ export default function KanbanBoard({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-neutral-400 mt-1.5">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-neutral-400 mt-1.5 truncate" title={`${lead.cidade}/${lead.uf}${lead.bairro ? ` • ${lead.bairro}` : ''}`}>
                               <MapPin className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 shrink-0" />
-                              <span className="font-medium">{lead.cidade}/{lead.uf}</span>
-                              {lead.bairro && <span className="font-normal text-slate-400 dark:text-neutral-500">• {lead.bairro}</span>}
+                              <span className="font-medium shrink-0">{lead.cidade}/{lead.uf}</span>
+                              {lead.bairro && <span className="font-normal text-slate-400 dark:text-neutral-500 truncate">• {lead.bairro}</span>}
                             </div>
 
                             {/* Badge de Score e Barra de Progresso */}
@@ -684,27 +688,38 @@ export default function KanbanBoard({
                         {/* Rodapé do Card: Ações de Contato e Avanço de Status */}
                         <div className="mt-3.5 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            {/* Botão de Iniciar Sequência de E-mails */}
-                            <button
-                              type="button"
-                              onClick={() => onSendEmail(lead)}
-                              disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
-                              className={`p-2 rounded-lg border transition ${
-                                lead.status_funil === 'em_sequencia'
-                                  ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
-                                  : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer'
-                              }`}
-                              title={
-                                lead.status_funil === 'em_sequencia'
-                                  ? 'Sequência já em andamento'
-                                  : 'Iniciar Sequência de E-mails (5 toques)'
-                              }
-                            >
-                              <Mail className="w-4 h-4" />
-                            </button>
+                            {/* Botão de E-mail: Ativo se houver e-mail, cinza desabilitado se não houver */}
+                            {hasEmail ? (
+                              <button
+                                type="button"
+                                onClick={() => onSendEmail(lead)}
+                                disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
+                                className={`p-2 rounded-lg border transition ${
+                                  lead.status_funil === 'em_sequencia'
+                                    ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
+                                    : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer shadow-2xs'
+                                }`}
+                                title={
+                                  lead.status_funil === 'em_sequencia'
+                                    ? 'Sequência já em andamento'
+                                    : `Iniciar Sequência de E-mails (${emailDisponivel})`
+                                }
+                              >
+                                <Mail className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="p-2 rounded-lg border border-slate-200 dark:border-neutral-800 bg-slate-100/70 dark:bg-neutral-900/40 text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-60"
+                                title="Nenhum e-mail cadastrado"
+                              >
+                                <Mail className="w-4 h-4" />
+                              </button>
+                            )}
 
-                            {/* Botão de WhatsApp Web (Ativo) */}
-                            {lead.telefone && (
+                            {/* Botão de WhatsApp: Ativo se houver telefone, cinza desabilitado se não houver */}
+                            {hasPhone ? (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -712,26 +727,23 @@ export default function KanbanBoard({
                                     onSendWhatsApp(lead);
                                   } else {
                                     const message = generateWhatsAppMessage(lead);
-                                    const url = getWhatsAppUrl(lead.telefone!, message);
+                                    const url = getWhatsAppUrl(telefoneDisponivel!, message);
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   }
                                 }}
-                                className="p-2 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer"
-                                title="Abrir WhatsApp Web"
+                                className="p-2 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer shadow-2xs"
+                                title={`Abrir WhatsApp Web (${telefoneDisponivel})`}
                               >
                                 <MessageCircle className="w-4 h-4" />
                               </button>
-                            )}
-
-                            {/* Botão de Agendar Reunião */}
-                            {onScheduleMeeting && (
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => onScheduleMeeting(lead)}
-                                className="p-2 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer"
-                                title="Agendar Reunião no Google Agenda"
+                                disabled
+                                className="p-2 rounded-lg border border-slate-200 dark:border-neutral-800 bg-slate-100/70 dark:bg-neutral-900/40 text-slate-300 dark:text-neutral-600 cursor-not-allowed opacity-60"
+                                title="Nenhum telefone ou WhatsApp cadastrado"
                               >
-                                <Calendar className="w-4 h-4" />
+                                <MessageCircle className="w-4 h-4" />
                               </button>
                             )}
                           </div>
