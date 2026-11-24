@@ -105,7 +105,20 @@ def criar_agente_execucao(
     resp = requests.post(endpoint, headers=headers, json=payload, timeout=15)
     if resp.status_code not in (200, 201) or not resp.json():
         raise RuntimeError(f"Erro ao criar execução em agente_execucoes ({resp.status_code}): {resp.text}")
-    return resp.json()[0]["id"]
+    agente_id = resp.json()[0]["id"]
+
+    try:
+        rotina_payload = {
+            "rotina": "agente_diario",
+            "status": "rodando",
+            "iniciado_em": datetime.now(timezone.utc).isoformat(),
+            "resumo": {"gatilho": gatilho, "agente_execucao_id": agente_id}
+        }
+        requests.post(f"{url}/rest/v1/rotinas_execucoes", headers=headers, json=rotina_payload, timeout=10)
+    except Exception as ex:
+        logging.warning(f"Erro ao registrar início em rotinas_execucoes: {ex}")
+
+    return agente_id
 
 
 def atualizar_etapa_execucao(
@@ -309,6 +322,27 @@ def finalizar_execucao(
         requests.patch(endpoint, headers=headers, json=payload, timeout=15)
     except Exception as ex:
         logging.warning(f"Erro ao finalizar registro de execução: {ex}")
+
+    try:
+        r_status = "sucesso" if status == "sucesso" else "erro"
+        r_payload = {
+            "finalizado_em": datetime.now(timezone.utc).isoformat(),
+            "status": r_status,
+            "resumo": {
+                "mensagem": mensagem,
+                "leads_entregues": leads_entregues,
+                "custo_total_usd": round(custo_total, 4)
+            },
+            "erro": mensagem if r_status == "erro" else None
+        }
+        requests.patch(
+            f"{url}/rest/v1/rotinas_execucoes?rotina=eq.agente_diario&status=eq.rodando",
+            headers=headers,
+            json=r_payload,
+            timeout=10
+        )
+    except Exception as ex:
+        logging.warning(f"Erro ao finalizar registro em rotinas_execucoes: {ex}")
 
 
 def executar_agente_sdr(

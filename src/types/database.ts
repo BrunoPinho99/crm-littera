@@ -411,3 +411,38 @@ export interface Reuniao {
   escolas?: Escola | null;
   contatos?: Contato | null;
 }
+
+export type TipoRotina =
+  | 'agente_diario'
+  | 'cron_sequencias'
+  | 'leitor_respostas'
+  | 'agenda'
+  | 'verificacao_email';
+
+export type StatusRotina = 'rodando' | 'sucesso' | 'erro';
+
+export interface RotinaExecucao {
+  id: string;
+  rotina: TipoRotina;
+  iniciado_em: string;
+  finalizado_em: string | null;
+  status: StatusRotina;
+  resumo: Record<string, unknown>;
+  erro: string | null;
+}
+
+export type SeveridadeAlerta = 'info' | 'aviso' | 'erro' | 'critico';
+
+export interface AlertaSistema {
+  id: string;
+  tipo: string;
+  titulo: string;
+  mensagem: string;
+  severidade: SeveridadeAlerta;
+  detalhes: Record<string, unknown>;
+  ativo: boolean;
+  criado_em: string;
+  resolvido_em: string | null;
+  ultimo_notificado_em: string | null;
+}
+

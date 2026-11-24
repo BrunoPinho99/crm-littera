@@ -1,130 +1,203 @@
-# CRM Littera - Prospecção Escolar B2B
+# CRM Littera — Prospecção Escolar B2B
 
-Sistema de prospecção de escolas particulares e decisores (Ensino Médio e Educação Básica) em Brasília/DF e Região Integrada de Desenvolvimento (RIDE - Entorno do DF) com automação de ponta a ponta, autenticação segura via Magic Link e controle de acesso estrito com Supabase RLS.
+Sistema de prospecção autônoma de escolas particulares que oferecem Ensino Médio no Distrito Federal e Entorno (RIDE-DF). O CRM integra um Agente SDR autônomo (Censo Escolar INEP + Enriquecimento Cadastral + Claude Anthropic), entrega 20 leads qualificados por dia útil, conduz sequências multitoque de e-mails via Brevo, detecta respostas com Gmail API e automatiza o agendamento de reuniões com o Cal.com.
 
 ---
 
-## 🛠️ Arquitetura
+## 1. Arquitetura Atual & Fluxo de Prospecção
 
+O funil opera de ponta a ponta sem dados inventados, com checagem estrita de fontes reais e registros em todas as etapas:
+
+```mermaid
+flowchart TD
+    A["1. Censo Escolar INEP (Microdados 2024)"] -->|Filtros: Privada, Ativa, Ensino Médio, Porte >= 40| B["Tabela escolas (Pendentes)"]
+    B --> C["2. Enriquecimento CNPJ (BrasilAPI / OpenCNPJ)"]
+    C --> D["3. Descoberta de Site (Google Places API New)"]
+    D --> E["4. Scraping & Decisores (BeautifulSoup + Claude Anthropic)"]
+    E -->|Mantenedor, Diretor, Coordenador de EM| F["5. Verificação de E-mails (ZeroBounce / Hunter)"]
+    F -->|Validação de elegibilidade (pode_enviar)| G["6. Matriz de Qualificação & Score (0 a 100)"]
+    G --> H["7. Lote Diário (20 leads qualificados)"]
+    H --> I["8. Motor de Sequências (Cadência 5 toques via Brevo)"]
+    I --> J{"9. Leitor de Respostas (Gmail API a cada 10 min)"}
+    J -->|Interesse / Dúvida| K["Classificador Claude Anthropic"]
+    J -->|Bounce / Descadastro| L["Desativação de Contato & Pausa de Cadência"]
+    K -->|Link ou Proposta de Reunião| M["10. Reunião Agendada (Cal.com Webhook)"]
+    M --> N["Pós-Reunião & Ata (Cancelamento de Cadência)"]
+```
+
+### Componentes do Sistema:
 - **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS v4, Lucide Icons.
-- **Autenticação & Segurança**: Supabase Auth (Magic Link por e-mail), `@supabase/ssr` com cookies de sessão, proxy Next.js (`src/proxy.ts`), controle de permissão por e-mail (`usuarios_autorizados`) e Row Level Security (RLS) estrito com função `SECURITY DEFINER`.
-- **Banco de Dados**: Supabase (PostgreSQL) com RLS ativado e sem permissões para o papel `anon`. Tabelas: `escolas`, `contatos`, `interacoes`, `agente_execucoes`, `usuarios_autorizados`.
-- **Base do ICP (Censo Escolar INEP)**: Script Python de streaming e importação de microdados oficiais do Censo Escolar da Educação Básica (INEP/MEC) com filtros estritos de qualificação e porte.
-- **Agente Diário SDR**: Scripts Python de prospecção e enriquecimento cadastral, orquestrados via GitHub Actions com `SUPABASE_SERVICE_ROLE_KEY`.
+- **Segurança & Auth**: Supabase Auth (Magic Link por e-mail), `@supabase/ssr` com cookies de sessão, controle de acesso estrito em `usuarios_autorizados` e RLS habilitado em 100% das tabelas públicas com função `is_usuario_autorizado()`.
+- **Agente SDR Diário (Python)**: Scripts em `/scripts` orquestrados via GitHub Actions (`leadbot.yml`) ou disparo manual no painel.
+- **Motor de Sequências & Rotinas (Next.js)**: Endpoint `/api/cron/sequencias` acionado a cada 10 minutos pelo Supabase `pg_cron`, executando de forma isolada:
+  1. Leitor de Respostas (Gmail API).
+  2. Agenda & Pós-Reunião.
+  3. Proteção Automática de Reputação (desativa caixas se bounce > 3% em 7 dias).
+  4. Motor de Disparo de E-mails (Brevo API v3).
+  5. Verificação e Envio de Alertas do Sistema para `NOTIFICAR_EMAIL`.
+- **Monitoramento & Saúde**: Página protegida `/saude` com status em tempo real das rotinas, funil semanal, entregabilidade por caixa e custos diários em 30 dias.
 
 ---
 
-## 🏫 Base do ICP: Censo Escolar (INEP)
+## 2. Lista Completa de Variáveis de Ambiente
 
-A base de escolas do CRM Littera é abastecida diretamente pelos **Microdados do Censo Escolar da Educação Básica do INEP** (ano mais recente: 2024). Essa é a única fonte primária oficial que identifica com precisão:
-1. Se a escola é privada (`TP_DEPENDENCIA = 4`).
-2. Se está em atividade (`TP_SITUACAO_FUNCIONAMENTO = 1`).
-3. Se oferece Ensino Médio regular (`IN_MED = 1` ou `QT_MAT_MED > 0`).
-4. O número real de alunos matriculados no Ensino Médio (`QT_MAT_MED`) e total (`QT_MAT_BAS`).
-5. O CNPJ oficial da escola e da sua mantenedora (com validação estrita de dígitos verificadores da Receita Federal).
+As credenciais do sistema são divididas estritamente de acordo com sua camada de execução:
 
-### 1. Execução Local
+| Nome da Variável | Descrição | Onde Vive (Ambiente) |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL da instância do Supabase | Vercel (All) / `.env.local` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública (`anon`) do Supabase | Vercel (All) / `.env.local` |
+| `SUPABASE_URL` | URL interna do Supabase para rotinas server e scripts | Vercel / GitHub Secrets / `.env.local` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave mestra de serviço com bypass de RLS | Vercel / GitHub Secrets / `.env.local` |
+| `BREVO_API_KEY` | Chave de API v3 do Brevo para disparos de e-mail | Vercel / Supabase Vault / `.env.local` |
+| `UNSUBSCRIBE_SECRET` | Chave de 32 bytes para assinatura HMAC-SHA256 de descadastro | Vercel / `.env.local` |
+| `APP_URL` | URL base da aplicação (ex: `https://littera.app.br`) | Vercel / GitHub Secrets / `.env.local` |
+| `LITTERA_RAZAO_SOCIAL` | Razão social obrigatória nos rodapés de e-mail | Vercel / `.env.local` |
+| `LITTERA_ENDERECO` | Endereço físico institucional obrigatório | Vercel / `.env.local` |
+| `CRON_SECRET` | Token Bearer para autenticar requisições em `/api/cron/sequencias` | Vercel / Supabase `pg_cron` / `.env.local` |
+| `NOTIFICAR_EMAIL` | E-mail do gestor para alertas críticos e respostas de leads | Vercel / GitHub Secrets / `.env.local` |
+| `GOOGLE_PLACES_API_KEY` | Chave Google Cloud para busca de websites escolares | GitHub Secrets / `.env.local` |
+| `ANTHROPIC_API_KEY` | Chave Anthropic para Claude 3.5 Haiku (decisores e respostas) | Vercel / GitHub Secrets / `.env.local` |
+| `ANTHROPIC_MODEL` | Modelo Claude a utilizar (`claude-3-5-haiku-latest`) | Vercel / GitHub Secrets / `.env.local` |
+| `EMAIL_VERIFIER` | Provedor de verificação (`zerobounce` ou `millionverifier`) | GitHub Secrets / `.env.local` |
+| `EMAIL_VERIFIER_API_KEY` | Chave do provedor de verificação de entregabilidade | GitHub Secrets / `.env.local` |
+| `HUNTER_API_KEY` | Chave Hunter.io para busca de e-mails em domínios escolares | GitHub Secrets / `.env.local` |
+| `GOOGLE_OAUTH_CLIENT_ID` | Client ID do Google Cloud para leitura de respostas (Gmail API) | Vercel / Supabase Vault / `.env.local` |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Client Secret do Google OAuth | Vercel / Supabase Vault / `.env.local` |
+| `TOKEN_ENCRYPTION_KEY` | Chave AES de 32 bytes (base64) para criptografia de tokens OAuth | Vercel / Supabase Vault / `.env.local` |
+| `CALCOM_WEBHOOK_SECRET` | Segredo para validação de assinaturas de webhook do Cal.com | Vercel / `.env.local` |
+| `CALCOM_EVENT_URL` | URL pública da página de agendamento do Cal.com | Vercel / `.env.local` |
+| `META_DIARIA` | Meta diária de leads qualificados (padrão: 20) | Vercel / GitHub Secrets / `.env.local` |
+| `MAX_CUSTO_DIARIO_USD` | Teto orçamentário diário do agente em USD (padrão: 5.0) | GitHub Secrets / `.env.local` |
+| `GITHUB_DISPATCH_TOKEN` | Token GitHub com permissão `actions:write` para botão manual | Vercel / `.env.local` |
+| `GITHUB_REPO` | Repositório no GitHub (ex: `BrunoPinho99/crm-littera`) | Vercel / `.env.local` |
+
+---
+
+## 3. Como Rodar Localmente
+
+### Pré-requisitos:
+- Node.js 22+
+- Python 3.12+ com ambiente virtual (`.venv`)
+
+### 1. Clonar e Instalar Dependências
 
 ```bash
-# Rodar teste simulado (não grava no Supabase e exibe distribuição por município)
-python scripts/importar_censo.py --ano 2024 --dry-run
-
-# Importação real para o banco Supabase
-python scripts/importar_censo.py --ano 2024
-
-# Usando arquivo CSV ou ZIP local já baixado
-python scripts/importar_censo.py --arquivo /caminho/para/microdados_ed_basica_2024.csv
-
-# Ajustando o porte mínimo de alunos no Ensino Médio (default: 40)
-python scripts/importar_censo.py --ano 2024 --min-matriculas 30
-```
-
-### 2. Execução via GitHub Actions
-
-O workflow `.github/workflows/importar_censo.yml` pode ser disparado manualmente através do botão **Run workflow** na aba Actions do GitHub, com suporte ao parâmetro de entrada `ano` (padrão: 2024).
-
-### 3. Customização de Regiões e Configurações
-
-- **`scripts/config/regioes.json`**: Define o Distrito Federal (todas as cidades) e a lista de municípios-alvo do estado de Goiás pertencentes ao Entorno do DF (ex: Águas Lindas de Goiás, Valparaíso de Goiás, Luziânia, Formosa, Novo Gama, Cidade Ocidental, Planaltina e Santo Antônio do Descoberto). Para expandir o território atendido, basta adicionar novos municípios ou estados nesta lista.
-- **`scripts/config/censo.json`**: Define a URL oficial do INEP para cada ano e o dicionário de mapeamento entre as colunas do Censo e os atributos das tabelas do CRM.
-- **Porte Mínimo (`MIN_MATRICULAS_EM`)**: Escolas com menos de 40 alunos no Ensino Médio são registradas com `status_qualificacao = 'descartado'` e o motivo correspondente anotado em `motivo_descarte`.
-
----
-
-## 🔐 Configuração de Segurança e Banco de Dados
-
-### 1. Aplicar a Migração no Supabase SQL Editor
-
-1. Acesse o painel do seu projeto no [Supabase](https://supabase.com).
-2. No menu lateral esquerdo, clique em **SQL Editor**.
-3. Execute as migrações em ordem:
-   - `supabase/migrations/0001_seguranca.sql`
-   - `supabase/migrations/0002_schema_v2.sql`
-4. **IMPORTANTE**: Antes de aplicar a migração 0001, garanta que seu e-mail esteja na lista de administradores autorizados em `usuarios_autorizados`.
-
----
-
-## 🚀 Execução Local da Aplicação Web
-
-### 1. Variáveis de Ambiente
-
-Crie o arquivo `.env.local` na raiz do projeto (baseado em `.env.example`):
-
-```env
-# Conexão do Usuário (Client-Side & Server SSR)
-NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon-ou-publishable
-
-# Conexão Administrativa Server-Only (Rotinas de Servidor e Scripts Python)
-SUPABASE_URL=https://seu-projeto.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role-secreta
-
-# Apify (opcional)
-APIFY_TOKEN=seu_apify_token_aqui
-
-# Infraestrutura de Envio (Brevo API + Descadastro)
-BREVO_API_KEY=xkeysib-sua_chave_brevo_v3
-UNSUBSCRIBE_SECRET=sua_chave_secreta_32_bytes_para_hmac
-APP_URL=https://littera.app.br
-LITTERA_RAZAO_SOCIAL="Littera Educação e Tecnologia LTDA"
-LITTERA_ENDERECO="Brasília - DF, Brasil"
-```
-
-### 2. Instalação e Execução
-
-```bash
+# Dependências do Next.js
 npm install
+
+# Ambiente virtual Python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r scripts/requirements.txt
+```
+
+### 2. Configurar Variáveis de Ambiente
+
+Copie o `.env.example` para `.env.local` e preencha com suas credenciais de desenvolvimento:
+```bash
+cp .env.example .env.local
+```
+
+### 3. Rodar a Aplicação Web
+
+```bash
 npm run dev
 ```
-
-Acesse [http://localhost:3000](http://localhost:3000). Se não estiver autenticado, você será automaticamente redirecionado para a página de `/login`.
+Acesse [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 📋 Variáveis de Ambiente para Deploy e CI/CD
+## 4. Como Rodar Cada Rotina Manualmente
 
-### 1. Na Vercel (Production & Preview)
+### A. Importação de Escolas do Censo Escolar (INEP)
+```bash
+# Modo simulado (não altera o Supabase)
+.venv/bin/python scripts/importar_censo.py --ano 2024 --dry-run
 
-Cadastre em **Project Settings > Environment Variables**:
+# Execução real para abastecer o banco com escolas do DF e RIDE
+.venv/bin/python scripts/importar_censo.py --ano 2024
+```
 
-| Nome da Variável | Descrição / Tipo |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase (`https://xxx.supabase.co`) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave pública `anon` ou `publishable` |
-| `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta de serviço (`service_role`) |
-| `BREVO_API_KEY` | Chave de API v3 do Brevo para envio transacional SMTP |
-| `UNSUBSCRIBE_SECRET` | Chave secreta de 32 bytes para assinatura HMAC-SHA256 de tokens de descadastro |
-| `APP_URL` | URL base da aplicação (`https://littera.app.br`) |
-| `LITTERA_RAZAO_SOCIAL` | Razão social institucional para rodapé obrigatório |
-| `LITTERA_ENDERECO` | Endereço físico ou sede para rodapé obrigatório |
-| `APIFY_TOKEN` | (Opcional) Token para serviços Apify |
+### B. Execução do Agente SDR Diário
+```bash
+# Execução manual forçando nova entrega mesmo que o lote de hoje já exista
+.venv/bin/python scripts/agente_sdr.py --gatilho manual --forcar
 
-### 2. No GitHub Secrets (para os Workflows `importar_censo.yml` e `leadbot.yml`)
+# Execução em modo dry-run (apenas simula sem persistir)
+.venv/bin/python scripts/agente_sdr.py --gatilho manual --dry-run
+```
 
-Cadastre em **Settings > Secrets and variables > Actions**:
+### C. Verificação de E-mails em Lote
+```bash
+# Verifica até 50 e-mails pendentes
+.venv/bin/python scripts/verificar_emails.py --limite 50
+```
 
-| Nome do Secret | Descrição |
-|---|---|
-| `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave secreta `service_role` (necessária para sincronização com o banco) |
+### D. Cron de Sequências, Respostas e Agenda
+Para rodar localmente a rotina do cron:
+```bash
+curl -X POST http://localhost:3000/api/cron/sequencias \
+  -H "Authorization: Bearer seu_token_cron_secret"
+```
+Para forçar o envio fora da janela comercial de 08:00–18:00:
+```bash
+curl -X POST "http://localhost:3000/api/cron/sequencias?forcar=true" \
+  -H "Authorization: Bearer seu_token_cron_secret"
+```
+
+---
+
+## 5. Guia de Problemas Comuns (Troubleshooting)
+
+### 1. O Agente SDR Diário Não Rodou
+- **Sintoma**: Painel `/saude` ou cabeçalho indica "Atraso no Agente SDR Diário" após as 08:00.
+- **Causas prováveis**:
+  1. O GitHub Actions `leadbot.yml` falhou por falta de secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ou `ANTHROPIC_API_KEY`).
+  2. O lote de hoje já havia sido gerado (comportamento idempotente). Use a flag `--forcar` para gerar novo lote.
+  3. O limite de custo diário (`MAX_CUSTO_DIARIO_USD`) foi atingido.
+- **Solução**: Verifique a aba **Actions** no GitHub ou consulte a tabela `rotinas_execucoes` no Supabase para ver a mensagem de erro exata registrada na coluna `erro`.
+
+### 2. O E-mail Não Saiu
+- **Sintoma**: Mensagens permanecem na fila de envios (`/fila`) e não são enviadas.
+- **Causas prováveis**:
+  1. Horário fora da janela comercial de envio (segunda a sexta, das 08:00 às 18:00 no fuso de São Paulo).
+  2. Limite diário de aquecimento da caixa de envio atingido (ex: 15 e-mails/dia no início).
+  3. Caixa de envio pausada automaticamente por proteção de entregabilidade (bounce > 3.0%).
+  4. E-mail do contato não possui status `'valido'` ou a escola está descadastrada.
+- **Solução**: Acesse `/configuracoes/email` e verifique se a caixa está ativa. No cron, adicione `?forcar=true` para disparos de teste.
+
+### 3. Resposta de Lead Não Foi Detectada
+- **Sintoma**: O lead respondeu ao e-mail, mas a cadência continua ativa e não há registro em `/repostas`.
+- **Causas prováveis**:
+  1. O token OAuth do Google para a caixa de envio expirou ou foi revogado.
+  2. O assunto do e-mail de resposta foi alterado pelo lead e perdeu o identificador RFC/Thread.
+  3. O cron de sequências não está rodando a cada 10 minutos.
+- **Solução**: Acesse `/saude` e verifique a última execução da rotina `leitor_respostas`. Se houver erro de token revogado, reconecte a caixa de envio no painel de configurações.
+
+### 4. Webhook do Cal.com Falhando
+- **Sintoma**: Reunião agendada no Cal.com não reflete na tabela `reunioes` e não cancela a sequência do lead.
+- **Causas prováveis**:
+  1. O header `X-Cal-Signature-256` não confere com o `CALCOM_WEBHOOK_SECRET` configurado na Vercel.
+  2. O e-mail do participante agendado no Cal.com difere do e-mail do contato cadastrado na sequência.
+- **Solução**: Acesse os logs do endpoint `/api/webhooks/calcom` na Vercel para inspecionar o payload recebido e confirme o segredo configurado no dashboard do Cal.com.
+
+---
+
+## 6. Testes Automatizados & Qualidade
+
+Para executar a suíte completa de testes:
+
+```bash
+# Testes TypeScript (Vitest)
+npm test
+
+# Cobertura de Testes TypeScript
+npm run test:coverage
+
+# Testes Python (Pytest)
+.venv/bin/python -m pytest scripts/tests
+
+# Validação Estática Completa
+npm run lint && npx tsc --noEmit && npm run build
+```

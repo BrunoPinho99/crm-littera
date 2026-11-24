@@ -679,7 +679,7 @@ export async function lerRespostasDasCaixas(): Promise<{
   const { data: caixas } = await supabaseAdmin
     .from('caixas_envio')
     .select('*')
-    .eq('ativa', true);
+    .eq('ativo', true);
 
   if (!caixas || caixas.length === 0) {
     return { caixasLidas: 0, mensagensProcessadas: 0, erros: [] };

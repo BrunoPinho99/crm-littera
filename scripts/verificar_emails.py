@@ -233,6 +233,21 @@ def verificar_emails_pendentes(
         "total_processados": total_pendentes
     }
 
+    rotina_exec_id = None
+    if not dry_run and registrar_execucao:
+        try:
+            headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "return=representation"}
+            r_resp = requests.post(f"{url}/rest/v1/rotinas_execucoes", headers=headers, json={
+                "rotina": "verificacao_email",
+                "status": "rodando",
+                "iniciado_em": iniciado_em.isoformat(),
+                "resumo": {"limite": limite, "pendentes": total_pendentes}
+            }, timeout=10)
+            if r_resp.status_code in (200, 201) and r_resp.json():
+                rotina_exec_id = r_resp.json()[0]["id"]
+        except Exception as ex_rot:
+            logging.warning(f"Erro ao registrar início de verificacao_email em rotinas_execucoes: {ex_rot}")
+
     if total_pendentes == 0:
         logging.info("Nenhum e-mail pendente de verificação. Tudo atualizado nos últimos 90 dias.")
         return stats
@@ -339,6 +354,17 @@ def verificar_emails_pendentes(
             registrar_agente_execucao(
                 url, key, "sucesso", total_pendentes, total_pendentes, msg_sucesso, iniciado_em
             )
+
+        if not dry_run and rotina_exec_id:
+            try:
+                headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+                requests.patch(f"{url}/rest/v1/rotinas_execucoes?id=eq.{rotina_exec_id}", headers=headers, json={
+                    "finalizado_em": datetime.now(timezone.utc).isoformat(),
+                    "status": "sucesso",
+                    "resumo": stats
+                }, timeout=10)
+            except Exception as ex_patch:
+                logging.warning(f"Erro ao finalizar rotinas_execucoes: {ex_patch}")
 
         return stats
 

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executarMotorSequencias } from '@/lib/sequencias/motor';
 import { lerRespostasDasCaixas } from '@/lib/email/leitor';
 import { marcarReunioesPendentesRegistro } from '@/lib/agendamento/posReuniao';
+import { executarRotinaComRegistro } from '@/lib/monitoramento/rotinas';
+import { verificarEProtegerEntregabilidadeCaixas } from '@/lib/monitoramento/entregabilidade';
+import { verificarAlertasSistema } from '@/lib/monitoramento/alertas';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,50 +39,60 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const url = new URL(request.url);
+  const forcarJanela = url.searchParams.get('forcar') === 'true';
+  const limiteParam = url.searchParams.get('limite');
+  const limite = limiteParam ? parseInt(limiteParam, 10) : undefined;
+
+  // 1. Leitor de Respostas (Isolado e com registro em rotinas_execucoes)
+  const rotinaLeitor = await executarRotinaComRegistro('leitor_respostas', async () => {
+    return await lerRespostasDasCaixas();
+  });
+
+  // 2. Agenda / Pós-reunião (Isolado e com registro em rotinas_execucoes)
+  const rotinaAgenda = await executarRotinaComRegistro('agenda', async () => {
+    return await marcarReunioesPendentesRegistro();
+  });
+
+  // 3. Proteção automática de entregabilidade (Calcula bounce 7d e desativa caixas se > 3%)
+  let resultadoEntregabilidade = { caixasVerificadas: 0, caixasDesativadas: [] as string[] };
   try {
-    const url = new URL(request.url);
-    const forcarJanela = url.searchParams.get('forcar') === 'true';
-    const limiteParam = url.searchParams.get('limite');
-    const limite = limiteParam ? parseInt(limiteParam, 10) : undefined;
+    resultadoEntregabilidade = await verificarEProtegerEntregabilidadeCaixas(7);
+  } catch (errEntreg) {
+    console.error('Erro na verificação de entregabilidade de caixas:', errEntreg);
+  }
 
-    // 1. Lê e processa respostas das caixas PRIMEIRO para evitar follow-up indevido
-    let resultadoLeitor = { caixasLidas: 0, mensagensProcessadas: 0, erros: [] as Array<{ caixaEmail: string; erro: string }> };
-    try {
-      resultadoLeitor = await lerRespostasDasCaixas();
-    } catch (leitorErr) {
-      console.error('Erro na leitura de respostas das caixas:', leitorErr);
-    }
-
-    // 2. Marca reuniões passadas há mais de 1 hora como pendentes de registro
-    let resultadoPosReuniao = { totalMarcadas: 0, erros: [] as string[] };
-    try {
-      const resPos = await marcarReunioesPendentesRegistro();
-      resultadoPosReuniao = { totalMarcadas: resPos.totalMarcadas, erros: resPos.erros };
-    } catch (posErr) {
-      console.error('Erro ao verificar reuniões passadas:', posErr);
-    }
-
-    // 3. Executa o motor de sequências
-    const resultado = await executarMotorSequencias({
+  // 4. Motor de Sequências (Isolado e com registro em rotinas_execucoes)
+  const rotinaMotor = await executarRotinaComRegistro('cron_sequencias', async () => {
+    return await executarMotorSequencias({
       forcarJanela,
       limite,
     });
+  });
 
-    return NextResponse.json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      leitor: resultadoLeitor,
-      posReuniao: resultadoPosReuniao,
-      ...resultado,
-    });
-  } catch (err) {
-    console.error('Erro na execução do cron de sequências:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { success: false, error: msg },
-      { status: 500 }
-    );
+  // 5. Verificação e Disparo de Alertas do Sistema (No máximo 1 envio por tipo por dia)
+  let resultadoAlertas = { alertasGerados: 0, alertasEnviados: 0 };
+  try {
+    resultadoAlertas = await verificarAlertasSistema();
+  } catch (errAlertas) {
+    console.error('Erro na verificação de alertas do sistema no cron:', errAlertas);
   }
+
+  const statusGeral =
+    rotinaMotor.sucesso && rotinaLeitor.sucesso && rotinaAgenda.sucesso
+      ? 'sucesso'
+      : 'parcial_com_falhas';
+
+  return NextResponse.json({
+    success: rotinaMotor.sucesso,
+    status: statusGeral,
+    timestamp: new Date().toISOString(),
+    leitor: rotinaLeitor.sucesso ? rotinaLeitor.resultado : { erro: rotinaLeitor.erro },
+    posReuniao: rotinaAgenda.sucesso ? rotinaAgenda.resultado : { erro: rotinaAgenda.erro },
+    entregabilidade: resultadoEntregabilidade,
+    motor: rotinaMotor.sucesso ? rotinaMotor.resultado : { erro: rotinaMotor.erro },
+    alertas: resultadoAlertas,
+  });
 }
 
 export async function GET(request: NextRequest) {

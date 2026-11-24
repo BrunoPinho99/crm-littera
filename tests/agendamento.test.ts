@@ -1,7 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
+
+vi.mock('../src/lib/envio/enviarEmail', () => ({
+  enviarEmail: vi.fn().mockResolvedValue({
+    sucesso: true,
+    provedorMessageId: 'mock-msg-id',
+    rfcMessageId: '<mock@littera>',
+    provedorThreadId: 'mock-th',
+    caixaEmail: 'comercial@littera.com.br',
+  }),
+}));
+
 import { verificarAssinaturaCalcom } from '../src/app/api/webhooks/calcom/route';
 import { linkAgenda } from '../src/lib/agendamento/link';
 import {

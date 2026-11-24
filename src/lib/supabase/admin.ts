@@ -28,3 +28,8 @@ export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
     autoRefreshToken: false,
   },
 });
+
+export function getAdminSupabase() {
+  return supabaseAdmin;
+}
+
