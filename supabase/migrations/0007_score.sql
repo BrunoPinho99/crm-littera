@@ -29,7 +29,7 @@ VALUES
     ('telefone', 5, NULL, 'Pontos para escola com telefone cadastrado'),
     ('regiao_prioritaria', 5, NULL, 'Pontos para escola em região prioritária'),
     ('regiao_prioritaria_uf', NULL, 'DF', 'UF prioritária de prospecção'),
-    ('score_minimo_qualificado', 60, NULL, 'Score de corte mínimo para qualificação automática')
+    ('score_minimo_qualificado', 45, NULL, 'Score de corte mínimo para qualificação automática')
 ON CONFLICT (chave) DO UPDATE SET
     valor = EXCLUDED.valor,
     valor_texto = EXCLUDED.valor_texto,
@@ -374,15 +374,15 @@ BEGIN
 
     -- Definição de status_qualificacao:
     -- 'descartado' nunca é alterado
-    -- Se status_funil != 'novo', mantém o status_qualificacao (não rebaixa lead no funil)
+    -- Se status_funil != 'novo', mantém como qualificado
     IF v_escola.status_qualificacao = 'descartado' THEN
         v_novo_status := 'descartado';
     ELSIF v_escola.status_funil != 'novo' THEN
-        v_novo_status := v_escola.status_qualificacao;
+        v_novo_status := 'qualificado';
     ELSE
         IF v_score >= v_score_minimo
-           AND v_tem_email_liberado = true
-           AND coalesce(v_escola.oferece_ensino_medio, true) = true THEN
+           AND coalesce(v_escola.oferece_ensino_medio, true) = true
+           AND (v_tem_email_liberado = true OR (v_escola.telefone IS NOT NULL AND trim(v_escola.telefone) <> '')) THEN
             v_novo_status := 'qualificado';
         ELSE
             v_novo_status := 'enriquecido';

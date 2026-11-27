@@ -48,18 +48,48 @@ export async function iniciarSequencia(
     }
 
     // 2. Busca contatos da escola
-    const { data: contatos, error: contatosErr } = await supabaseAdmin
+    const { data: contatos } = await supabaseAdmin
       .from('contatos')
       .select('*')
       .eq('escola_id', escolaId);
 
-    if (contatosErr || !contatos || contatos.length === 0) {
-      return { success: false, error: 'Escola sem contatos cadastrados.' };
+    const listaContatos: Contato[] = (contatos as Contato[]) || [];
+
+    // Se não há contatos com e-mail, verifica se a escola possui email_geral para criar contato padrão
+    if (listaContatos.length === 0 || !listaContatos.some((c) => Boolean(c.email))) {
+      const { data: escolaData } = await supabaseAdmin
+        .from('escolas')
+        .select('id, nome, email_geral, email_geral_status')
+        .eq('id', escolaId)
+        .maybeSingle();
+
+      if (escolaData?.email_geral) {
+        const { data: novoContato } = await supabaseAdmin
+          .from('contatos')
+          .insert({
+            escola_id: escolaId,
+            nome: 'Equipe / Secretaria Pedagógica',
+            cargo: 'Contato Institucional',
+            email: escolaData.email_geral,
+            email_status: escolaData.email_geral_status || 'valido',
+            principal: true,
+          })
+          .select()
+          .single();
+
+        if (novoContato) {
+          listaContatos.push(novoContato as Contato);
+        }
+      }
+    }
+
+    if (listaContatos.length === 0) {
+      return { success: false, error: 'Escola sem contatos ou e-mail cadastrados.' };
     }
 
     let contatoAlvo: Contato | null = null;
     if (contatoId) {
-      const c = contatos.find((item) => item.id === contatoId);
+      const c = listaContatos.find((item) => item.id === contatoId);
       if (c && !c.descadastrado && c.email && podeEnviarEmail(c.email_status)) {
         contatoAlvo = c as Contato;
       } else {
@@ -79,7 +109,7 @@ export async function iniciarSequencia(
         secretaria: 6,
       };
 
-      const elegiveis = (contatos as Contato[])
+      const elegiveis = listaContatos
         .filter((c) => !c.descadastrado && Boolean(c.email) && podeEnviarEmail(c.email_status))
         .sort((a, b) => {
           if (a.principal && !b.principal) return -1;
@@ -92,7 +122,7 @@ export async function iniciarSequencia(
       if (elegiveis.length === 0) {
         return {
           success: false,
-          error: 'Nenhum contato desta escola possui e-mail verificado e liberado para envio (pode_enviar).',
+          error: 'Nenhum contato desta escola possui e-mail disponível para envio de sequências.',
         };
       }
 
