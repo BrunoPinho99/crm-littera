@@ -211,6 +211,8 @@ export async function iniciarSequencia(
 export async function iniciarSequenciaLoteHojeAction(): Promise<{
   success: boolean;
   totalInscritos: number;
+  enviosRealizados?: number;
+  passosProcessados?: number;
   erros: string[];
 }> {
   await requireUser();
@@ -262,17 +264,113 @@ export async function iniciarSequenciaLoteHojeAction(): Promise<{
       }
     }
 
+    // Executa imediatamente o motor para gerar o primeiro toque e disparar
+    let enviosRealizados = 0;
+    let passosProcessados = 0;
+    try {
+      const { executarMotorSequencias } = await import('@/lib/sequencias/motor');
+      const resultadoMotor = await executarMotorSequencias({ forcarJanela: true, limite: 50 });
+      enviosRealizados = resultadoMotor.enviosRealizados;
+      passosProcessados = resultadoMotor.inscricoesProcessadas;
+      if (resultadoMotor.erros && resultadoMotor.erros.length > 0) {
+        erros.push(...resultadoMotor.erros);
+      }
+    } catch (mErr) {
+      console.warn('Aviso: motor executado parcialmente após inscrição em lote:', mErr);
+    }
+
     revalidatePath('/');
     revalidatePath('/sequencias');
     revalidatePath('/fila');
 
-    return { success: true, totalInscritos, erros };
+    return { 
+      success: true, 
+      totalInscritos, 
+      enviosRealizados, 
+      passosProcessados, 
+      erros 
+    };
   } catch (err: unknown) {
     console.error('Erro na inscrição em lote:', err);
     return {
       success: false,
       totalInscritos: 0,
+      enviosRealizados: 0,
+      passosProcessados: 0,
       erros: [err instanceof Error ? err.message : 'Falha desconhecida no lote.'],
+    };
+  }
+}
+
+/**
+ * Automação de Disparo de Campanhas:
+ * 1. Inscreve todas as escolas qualificadas ativas que ainda não possuem sequência
+ * 2. Processa os passos pendentes no motor de cadência
+ * 3. Dispara os e-mails liberados da fila
+ */
+export async function dispararCampanhaAutomaticaAction(options?: {
+  apenasLoteHoje?: boolean;
+  forcarJanela?: boolean;
+}): Promise<{
+  success: boolean;
+  totalInscritos: number;
+  passosProcessados: number;
+  enviosRealizados: number;
+  erros: string[];
+}> {
+  await requireUser();
+
+  try {
+    const { data: escolasQualificadas } = await supabaseAdmin
+      .from('escolas')
+      .select('id, nome, status_funil, status_qualificacao')
+      .eq('status_qualificacao', 'qualificado')
+      .in('status_funil', ['novo', 'em_sequencia']);
+
+    let totalInscritos = 0;
+    const erros: string[] = [];
+
+    if (escolasQualificadas && escolasQualificadas.length > 0) {
+      for (const escola of escolasQualificadas) {
+        const res = await iniciarSequencia(escola.id);
+        if (res.success) {
+          totalInscritos++;
+        } else if (!res.error?.includes('já possui uma sequência')) {
+          erros.push(`${escola.nome}: ${res.error}`);
+        }
+      }
+    }
+
+    // Executa o motor de disparos
+    const { executarMotorSequencias } = await import('@/lib/sequencias/motor');
+    const resMotor = await executarMotorSequencias({
+      forcarJanela: options?.forcarJanela ?? true,
+      limite: 50,
+    });
+
+    if (resMotor.erros && resMotor.erros.length > 0) {
+      erros.push(...resMotor.erros);
+    }
+
+    revalidatePath('/');
+    revalidatePath('/sequencias');
+    revalidatePath('/fila');
+
+    return {
+      success: true,
+      totalInscritos,
+      passosProcessados: resMotor.inscricoesProcessadas,
+      enviosRealizados: resMotor.enviosRealizados,
+      erros,
+    };
+  } catch (err: unknown) {
+    console.error('Erro ao disparar campanha automática:', err);
+    return {
+      success: false,
+      totalInscritos: 0,
+      passosProcessados: 0,
+      enviosRealizados: 0,
+      erros: [err instanceof Error ? err.message : 'Falha ao disparar automação de campanhas'],
     };
   }
 }

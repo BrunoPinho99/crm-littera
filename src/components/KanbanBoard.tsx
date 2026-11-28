@@ -25,7 +25,9 @@ import {
   Video,
   FileCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Ban,
+  RotateCcw
 } from 'lucide-react';
 import { generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/whatsapp';
 
@@ -100,7 +102,7 @@ function getBadgeClassificacao(classificacao: ClassificacaoResposta) {
 
 interface KanbanBoardProps {
   leads: EscolaComContatos[];
-  onStatusChange: (leadId: string, newStatus: StatusFunil, oldStatus?: StatusFunil) => void;
+  onStatusChange: (leadId: string, newStatus: StatusFunil, oldStatus?: StatusFunil, motivo?: string) => void;
   onSendEmail: (lead: EscolaComContatos) => void;
   onSendWhatsApp?: (lead: EscolaComContatos) => void;
   onEditLead: (lead: EscolaComContatos) => void;
@@ -179,6 +181,15 @@ const COLUMNS: {
     borderClass: 'border-amber-200 dark:border-amber-800/60',
     headerBg: 'bg-amber-50/50 dark:bg-amber-950/30',
     icon: <Calendar className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />,
+  },
+  {
+    id: 'sem_interesse',
+    title: 'Disseram Não / Recusado',
+    badgeBg: 'bg-rose-100 dark:bg-rose-950/80',
+    badgeText: 'text-rose-800 dark:text-rose-300',
+    borderClass: 'border-rose-200 dark:border-rose-900/60',
+    headerBg: 'bg-rose-50/50 dark:bg-rose-950/30',
+    icon: <Ban className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />,
   },
 ];
 
@@ -306,6 +317,15 @@ export default function KanbanBoard({
             }
             return;
           }
+        }
+        if (targetStatus === 'sem_interesse') {
+          const motivo = prompt(
+            `Mover "${currentLead.nome}" para "Disseram Não / Sem Interesse"?\n\nIsso cancelará campanhas ativas e removerá da lista principal.\n\nMotivo da recusa (opcional):`,
+            'Sem interesse no momento'
+          );
+          if (motivo === null) return;
+          onStatusChange(leadId, targetStatus, currentLead.status_funil, motivo);
+          return;
         }
         onStatusChange(leadId, targetStatus, currentLead.status_funil);
       }
@@ -546,6 +566,21 @@ export default function KanbanBoard({
                             </div>
                           )}
 
+                          {/* Motivo de Recusa / Disse Não */}
+                          {lead.status_funil === 'sem_interesse' && (
+                            <div className="mt-2.5 p-2 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-300 space-y-1">
+                              <div className="flex items-center gap-1.5 font-bold text-[11px] text-rose-700 dark:text-rose-300">
+                                <Ban className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                <span>Disse Não / Sem Interesse</span>
+                              </div>
+                              {lead.motivo_descarte && (
+                                <p className="italic text-[11px] text-rose-900 dark:text-rose-200 line-clamp-2">
+                                  &ldquo;{lead.motivo_descarte}&rdquo;
+                                </p>
+                              )}
+                            </div>
+                          )}
+
                           {/* Gancho de Personalização SDR */}
                           {lead.gancho_personalizacao && (
                             <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs text-indigo-900 dark:text-indigo-200">
@@ -746,9 +781,39 @@ export default function KanbanBoard({
                                 <MessageCircle className="w-4 h-4" />
                               </button>
                             )}
+                            {/* Botão Disse Não: disponível para remover imediatamente da lista ativa */}
+                            {column.id !== 'sem_interesse' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const motivo = prompt(
+                                    `Marcar "${lead.nome}" como Sem Interesse / Disse Não?\n\nIsso cancelará sequências de e-mail e removerá o lead da lista ativa.\n\nInforme o motivo da recusa (opcional):`,
+                                    'Sem interesse no momento'
+                                  );
+                                  if (motivo !== null) {
+                                    onStatusChange(lead.id, 'sem_interesse', lead.status_funil, motivo);
+                                  }
+                                }}
+                                className="p-2 rounded-lg border border-rose-200/80 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition cursor-pointer shadow-2xs"
+                                title="Marcar que disse NÃO / Sem Interesse (remove do funil ativo)"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
 
-                          {/* Botão Rápido de Avançar Etapa */}
+                          {/* Botão Rápido de Avançar Etapa ou Reativar */}
+                          {column.id === 'sem_interesse' && (
+                            <button
+                              type="button"
+                              onClick={() => onStatusChange(lead.id, 'novo', 'sem_interesse')}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                              title="Reativar lead e mover de volta para Novo no funil"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Reativar</span>
+                            </button>
+                          )}
                           {column.id === 'novo' && (
                             <button
                               type="button"

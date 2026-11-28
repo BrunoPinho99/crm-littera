@@ -1,0 +1,44 @@
+name: Automação de Campanhas e Disparos
+
+on:
+  schedule:
+    # A cada 30 minutos em dias úteis (Segunda a Sexta), das 08h às 18h de Brasília (11h às 21h UTC)
+    - cron: '*/30 11-21 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      forcar_janela:
+        description: 'Forçar envio mesmo fora da janela comercial de Brasília'
+        type: boolean
+        default: false
+
+concurrency:
+  group: automacao-campanhas
+  cancel-in-progress: false
+
+jobs:
+  executar-campanha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Disparar Cron de Sequências e Campanhas
+        run: |
+          APP_URL="${{ vars.NEXT_PUBLIC_APP_URL || 'https://crm-littera.vercel.app' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          FORCAR="${{ github.event.inputs.forcar_janela || 'false' }}"
+          
+          echo "Disparando automação em $APP_URL/api/cron/sequencias?forcar=$FORCAR"
+          
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "$APP_URL/api/cron/sequencias?forcar=$FORCAR" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" || true)
+            
+          cat response.json || true
+          echo ""
+          
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ]; then
+            echo "Automação executada com sucesso (HTTP $HTTP_STATUS)!"
+          else
+            echo "Resposta HTTP $HTTP_STATUS"
+          fi

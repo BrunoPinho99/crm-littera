@@ -4,6 +4,7 @@ import { generateLeadEmailContent } from '@/lib/envio/conteudoLead';
 import { enviarEmail } from '@/lib/envio/enviarEmail';
 import { revalidatePath } from 'next/cache';
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { 
   EscolaComContatos, 
@@ -131,7 +132,8 @@ export async function getLeads(): Promise<EscolaComContatos[]> {
 export async function updateLeadStatus(
   leadId: string,
   newStatus: StatusFunil,
-  oldStatus?: StatusFunil
+  oldStatus?: StatusFunil,
+  motivo?: string
 ): Promise<{ success: boolean; error?: string }> {
   await requireUser();
 
@@ -141,17 +143,66 @@ export async function updateLeadStatus(
       return res;
     }
 
+    // Se o lead foi marcado como sem_interesse / descadastrado, cancela sequências e descarta fila
+    if (newStatus === 'sem_interesse' || newStatus === 'descadastrado') {
+      await supabaseAdmin
+        .from('escolas')
+        .update({
+          motivo_descarte: motivo || (newStatus === 'sem_interesse' ? 'Lead disse não / sem interesse' : 'Descadastrado'),
+        })
+        .eq('id', leadId);
+
+      // Cancela sequências ativas ou pausadas
+      await supabaseAdmin
+        .from('inscricoes')
+        .update({
+          status: 'cancelada',
+          motivo_cancelamento: motivo || 'Lead marcou recusa (Disse Não)',
+          atualizado_em: new Date().toISOString(),
+        })
+        .eq('escola_id', leadId)
+        .in('status', ['ativa', 'pausada']);
+
+      // Descarta mensagens pendentes na fila
+      const { data: inscricoesEscola } = await supabaseAdmin
+        .from('inscricoes')
+        .select('id')
+        .eq('escola_id', leadId);
+
+      if (inscricoesEscola && inscricoesEscola.length > 0) {
+        const ids = inscricoesEscola.map((i) => i.id);
+        await supabaseAdmin
+          .from('fila_envios')
+          .update({
+            status: 'descartado',
+            erro: 'Lead marcou recusa (Disse Não / Sem Interesse)',
+          })
+          .in('inscricao_id', ids)
+          .in('status', ['aguardando_aprovacao', 'aprovado']);
+      }
+    } else if (oldStatus === 'sem_interesse' || oldStatus === 'descadastrado') {
+      // Reativação do lead: limpa motivo de descarte
+      await supabaseAdmin
+        .from('escolas')
+        .update({ motivo_descarte: null })
+        .eq('id', leadId);
+    }
+
     // Registra a interação de mudança de status
     await createInteracao({
       escola_id: leadId,
       tipo: 'mudanca_status',
-      assunto: 'Alteração de status no funil',
-      conteudo: `Status alterado de "${oldStatus || 'não especificado'}" para "${newStatus}".`,
-      metadata: { de: oldStatus || null, para: newStatus },
+      assunto: newStatus === 'sem_interesse' ? 'Lead informou recusa (Disse Não)' : 'Alteração de status no funil',
+      conteudo: newStatus === 'sem_interesse'
+        ? `Contato realizado. Lead informou que não tem interesse: "${motivo || 'Recusa / Disse Não'}". Removido do funil ativo.`
+        : `Status alterado de "${oldStatus || 'não especificado'}" para "${newStatus}".`,
+      metadata: { de: oldStatus || null, para: newStatus, motivo: motivo || null },
     });
 
     try {
       revalidatePath('/');
+      revalidatePath('/sequencias');
+      revalidatePath('/fila');
     } catch {
       // Ignora erro fora de requisição HTTP
     }
@@ -163,6 +214,26 @@ export async function updateLeadStatus(
       error: err instanceof Error ? err.message : 'Erro interno ao atualizar status',
     };
   }
+}
+
+/**
+ * Marca explicitamente que a escola foi contatada e disse NÃO / sem interesse.
+ * Remove a escola do funil ativo, cancela sequências em andamento e registra a recusa.
+ */
+export async function marcarLeadDisseNaoAction(
+  leadId: string,
+  motivo?: string
+): Promise<{ success: boolean; error?: string }> {
+  return updateLeadStatus(leadId, 'sem_interesse', undefined, motivo || 'Lead informou que não tem interesse (Disse Não)');
+}
+
+/**
+ * Reativa um lead que anteriormente disse não, recolocando-o na etapa inicial ("novo").
+ */
+export async function reativarLeadAction(
+  leadId: string
+): Promise<{ success: boolean; error?: string }> {
+  return updateLeadStatus(leadId, 'novo', 'sem_interesse');
 }
 
 /**

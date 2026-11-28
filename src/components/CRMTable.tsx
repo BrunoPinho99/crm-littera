@@ -45,7 +45,10 @@ import {
   ShieldCheck,
   ShieldAlert,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  Ban,
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 
 interface CRMDashboardProps {
@@ -54,7 +57,7 @@ interface CRMDashboardProps {
   initialUltimaExecucao?: AgenteExecucao | null;
 }
 
-type FilterStatus = 'todos' | StatusFunil;
+type FilterStatus = 'ativos' | 'todos' | 'sem_interesse' | StatusFunil;
 
 function EmailStatusBadge({ status }: { status: EmailStatus }) {
   switch (status) {
@@ -115,9 +118,9 @@ export default function CRMTable({
   const [leads, setLeads] = useState<EscolaComContatos[]>(initialLeads);
   const [currentTab, setCurrentTab] = useState<'leads' | 'kanban'>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>('todos');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('ativos');
   const [onlyCurated, setOnlyCurated] = useState(false);
-  const [onlyTodayLeads, setOnlyTodayLeads] = useState(true);
+  const [onlyTodayLeads, setOnlyTodayLeads] = useState(false);
   const [agentMode] = useState<MascotMode>('working');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -184,8 +187,17 @@ export default function CRMTable({
         lead.cidade.toLowerCase().includes(searchTerm.toLowerCase()) ||
         matchContatos;
 
-      const matchesStatus =
-        statusFilter === 'todos' ? true : lead.status_funil === statusFilter;
+      // Se statusFilter for 'ativos' (padrão), remove leads que disseram não / descadastrados
+      let matchesStatus = true;
+      if (statusFilter === 'ativos') {
+        matchesStatus = lead.status_funil !== 'sem_interesse' && lead.status_funil !== 'descadastrado';
+      } else if (statusFilter === 'todos') {
+        matchesStatus = true;
+      } else if (statusFilter === 'sem_interesse') {
+        matchesStatus = lead.status_funil === 'sem_interesse' || lead.status_funil === 'descadastrado';
+      } else {
+        matchesStatus = lead.status_funil === statusFilter;
+      }
 
       const matchesCurated = onlyCurated ? lead.status_qualificacao === 'qualificado' : true;
 
@@ -209,11 +221,13 @@ export default function CRMTable({
   const counts = useMemo(() => {
     return {
       total: leads.length,
+      ativos: leads.filter((l) => l.status_funil !== 'sem_interesse' && l.status_funil !== 'descadastrado').length,
       novos: leads.filter((l) => l.status_funil === 'novo').length,
       emSequencia: leads.filter((l) => l.status_funil === 'em_sequencia').length,
       contactados: leads.filter((l) => l.status_funil === 'contato_enviado').length,
       respondidos: leads.filter((l) => l.status_funil === 'respondido').length,
       reuniao: leads.filter((l) => l.status_funil === 'reuniao_agendada').length,
+      semInteresse: leads.filter((l) => l.status_funil === 'sem_interesse' || l.status_funil === 'descadastrado').length,
     };
   }, [leads]);
 
@@ -298,15 +312,21 @@ export default function CRMTable({
   const handleStatusChange = async (
     leadId: string, 
     newStatus: StatusFunil, 
-    oldStatus?: StatusFunil
+    oldStatus?: StatusFunil,
+    motivo?: string
   ) => {
     setUpdatingId(leadId);
-    const res = await updateLeadStatus(leadId, newStatus, oldStatus);
+    const res = await updateLeadStatus(leadId, newStatus, oldStatus, motivo);
     if (res.success) {
       setLeads((prev) =>
         prev.map((item) =>
           item.id === leadId
-            ? { ...item, status_funil: newStatus, ultima_interacao: new Date().toISOString() }
+            ? { 
+                ...item, 
+                status_funil: newStatus, 
+                motivo_descarte: newStatus === 'sem_interesse' || newStatus === 'descadastrado' ? (motivo || item.motivo_descarte || 'Sem interesse declarado') : null,
+                ultima_interacao: new Date().toISOString() 
+              }
             : item
         )
       );
@@ -314,6 +334,23 @@ export default function CRMTable({
       alert(`Erro ao atualizar status: ${res.error}`);
     }
     setUpdatingId(null);
+  };
+
+  // Marcar que a escola disse Não (remove da lista ativa e cancela sequências)
+  const handleMarcarDisseNao = async (lead: EscolaComContatos) => {
+    const motivo = prompt(
+      `Escola "${lead.nome}" disse NÃO.\nInforme o motivo da recusa (opcional):`,
+      'Sem interesse no momento'
+    );
+    if (motivo === null) return;
+    await handleStatusChange(lead.id, 'sem_interesse', lead.status_funil, motivo);
+  };
+
+  // Reativar escola que disse Não de volta para o funil ativo
+  const handleReativarLead = async (lead: EscolaComContatos) => {
+    const confirmar = confirm(`Deseja reativar a escola "${lead.nome}" de volta para o funil ativo (status Novo)?`);
+    if (!confirmar) return;
+    await handleStatusChange(lead.id, 'novo', lead.status_funil);
   };
 
   // Iniciar Sequência de E-mails Individual (5 Toques)
@@ -389,10 +426,10 @@ export default function CRMTable({
     window.location.reload();
   };
 
-  // Inscrição em Massa de Leads do Lote de Hoje na Sequência Padrão
+  // Inscrição em Massa e Disparo Imediato da Sequência
   const handleIniciarSequenciaLoteHoje = async () => {
     const confirmar = confirm(
-      'Deseja inscrever todas as escolas qualificadas do lote de hoje na Sequência de E-mails?\n\nOs disparos respeitarão as janelas comerciais de Brasília e o modo de aprovação configurado.'
+      'Deseja disparar a automação de campanhas agora?\n\nIsso irá inscrever as escolas qualificadas do lote de hoje e executar imediatamente os disparos de e-mails via Brevo.'
     );
     if (!confirmar) return;
 
@@ -401,16 +438,19 @@ export default function CRMTable({
       const res = await iniciarSequenciaLoteHojeAction();
       if (res.success) {
         alert(
-          `Inscrição concluída!\n${res.totalInscritos} escola(s) inscrita(s) com sucesso na sequência.` +
-            (res.erros && res.erros.length > 0 ? `\n\nAvisos:\n${res.erros.slice(0, 3).join('\n')}` : '')
+          `🚀 Automação de Campanhas Executada com Sucesso!\n\n` +
+          `• Escolas inscritas hoje: ${res.totalInscritos}\n` +
+          `• E-mails disparados via Brevo: ${res.enviosRealizados}\n` +
+          `• Passos processados no motor: ${res.passosProcessados}` +
+          (res.erros && res.erros.length > 0 ? `\n\n⚠️ Observações:\n${res.erros.slice(0, 3).join('\n')}` : '')
         );
         window.location.reload();
       } else {
-        alert(`Erro na inscrição do lote: ${res.erros?.[0] || 'Falha desconhecida.'}`);
+        alert(`Erro na automação de campanhas: ${res.erros?.[0] || 'Falha desconhecida.'}`);
       }
     } catch (err) {
-      console.error('Erro na ação de inscrição em lote:', err);
-      alert('Erro inesperado ao inscrever lote de hoje.');
+      console.error('Erro na ação de automação de campanhas:', err);
+      alert('Erro inesperado ao executar disparo da campanha.');
     } finally {
       setIsEnrollingBatch(false);
     }
@@ -455,13 +495,15 @@ export default function CRMTable({
         );
       case 'sem_interesse':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700">
-            Sem Interesse
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+            <Ban className="w-3 h-3 text-rose-500" />
+            Disse Não
           </span>
         );
       case 'descadastrado':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 border border-slate-200 dark:border-neutral-700">
+            <Ban className="w-3 h-3 text-slate-500" />
             Descadastrado
           </span>
         );
@@ -531,15 +573,15 @@ export default function CRMTable({
           </div>
 
           <div className="flex items-center gap-3 shrink-0 flex-wrap md:flex-nowrap">
-            {/* Botão de Inscrição em Massa na Sequência (Etapa 10) */}
+            {/* Botão de Disparo da Automação de Campanhas */}
             <button
               disabled={isEnrollingBatch}
               onClick={handleIniciarSequenciaLoteHoje}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 shadow-xs transition cursor-pointer disabled:opacity-50"
-              title="Inscreve todas as escolas qualificadas entregues hoje na sequência de 5 toques"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-500/20 transition cursor-pointer disabled:opacity-50"
+              title="Inscreve as escolas qualificadas de hoje e dispara imediatamente os e-mails da sequência via Brevo"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>{isEnrollingBatch ? 'Inscrevendo Lote...' : 'Iniciar Sequência (Leads de Hoje)'}</span>
+              <span>{isEnrollingBatch ? 'Disparando Campanha...' : 'Disparar Automação de Campanhas'}</span>
             </button>
 
             {/* Botão Cadastrar Escola */}
@@ -641,51 +683,108 @@ export default function CRMTable({
         </div>
 
         {/* CARDS DE MÉTRICAS */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-          <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'ativos' ? 'todos' : 'ativos')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'ativos'
+                ? 'border-blue-400 dark:border-blue-600 bg-blue-50/30 dark:bg-blue-950/20 ring-2 ring-blue-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-slate-300'
+            }`}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] uppercase tracking-wider text-slate-400 dark:text-neutral-500 font-bold">Total Mapeadas</span>
+              <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-neutral-400 font-bold">Funil Ativo</span>
               <Building2 className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
             </div>
-            <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.total}</div>
-            <p className="text-[11px] text-slate-500 mt-1">Escolas no banco</p>
-          </div>
+            <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.ativos}</div>
+            <p className="text-[11px] text-slate-500 mt-1">Oculta quem disse não</p>
+          </button>
 
-          <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'novo' ? 'ativos' : 'novo')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'novo'
+                ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-emerald-200'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">Novas</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             </div>
             <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.novos}</div>
             <p className="text-[11px] text-slate-500 mt-1">Aguardando início</p>
-          </div>
+          </button>
 
-          <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'em_sequencia' ? 'ativos' : 'em_sequencia')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'em_sequencia'
+                ? 'border-sky-400 dark:border-sky-600 bg-sky-50/30 dark:bg-sky-950/20 ring-2 ring-sky-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-sky-200'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-sky-600 dark:text-sky-400 font-bold">Em sequência</span>
               <Play className="w-4 h-4 text-sky-600 dark:text-sky-400" />
             </div>
             <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.emSequencia}</div>
             <p className="text-[11px] text-slate-500 mt-1">Na cadência</p>
-          </div>
+          </button>
 
-          <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'respondido' ? 'ativos' : 'respondido')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'respondido'
+                ? 'border-purple-400 dark:border-purple-600 bg-purple-50/30 dark:bg-purple-950/20 ring-2 ring-purple-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-purple-200'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-purple-600 dark:text-purple-400 font-bold">Respondidos</span>
               <MessageSquareCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             </div>
             <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.respondidos}</div>
             <p className="text-[11px] text-slate-500 mt-1">Interações ativas</p>
-          </div>
+          </button>
 
-          <div className="bg-white dark:bg-[#121215] border border-slate-200 dark:border-neutral-800 p-4 rounded-2xl shadow-xs transition-colors">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'reuniao_agendada' ? 'ativos' : 'reuniao_agendada')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'reuniao_agendada'
+                ? 'border-amber-400 dark:border-amber-600 bg-amber-50/30 dark:bg-amber-950/20 ring-2 ring-amber-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-amber-200'
+            }`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400 font-bold">Reuniões</span>
               <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.reuniao}</div>
             <p className="text-[11px] text-slate-500 mt-1">No Google Agenda</p>
-          </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'sem_interesse' ? 'ativos' : 'sem_interesse')}
+            className={`text-left bg-white dark:bg-[#121215] border p-4 rounded-2xl shadow-xs transition cursor-pointer ${
+              statusFilter === 'sem_interesse'
+                ? 'border-rose-400 dark:border-rose-700 bg-rose-50/40 dark:bg-rose-950/30 ring-2 ring-rose-400/20'
+                : 'border-slate-200 dark:border-neutral-800 hover:border-rose-300 dark:hover:border-rose-900/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold">Disseram Não</span>
+              <Ban className="w-4 h-4 text-rose-500" />
+            </div>
+            <div className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-neutral-100">{counts.semInteresse}</div>
+            <p className="text-[11px] text-slate-500 mt-1">Fora do Funil Ativo</p>
+          </button>
         </div>
 
         {/* BARRA DE FILTROS E ORDENAÇÃO (Compartilhada entre Kanban e Tabela) */}
@@ -705,14 +804,16 @@ export default function CRMTable({
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
-              className="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+              className="px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer font-medium"
             >
-              <option value="todos">Todos os Status</option>
-              <option value="novo">Novo</option>
-              <option value="em_sequencia">Em sequência</option>
-              <option value="contato_enviado">Contato Enviado</option>
-              <option value="respondido">Respondido</option>
-              <option value="reuniao_agendada">Reunião Agendada</option>
+              <option value="ativos">Funil Ativo (Oculta quem disse não)</option>
+              <option value="todos">Todos os Status ({counts.total})</option>
+              <option value="novo">Novo ({counts.novos})</option>
+              <option value="em_sequencia">Em sequência ({counts.emSequencia})</option>
+              <option value="contato_enviado">Contato Enviado ({counts.contactados})</option>
+              <option value="respondido">Respondido ({counts.respondidos})</option>
+              <option value="reuniao_agendada">Reunião Agendada ({counts.reuniao})</option>
+              <option value="sem_interesse">🚫 Disseram Não / Recusados ({counts.semInteresse})</option>
             </select>
 
             <select
@@ -908,49 +1009,81 @@ export default function CRMTable({
 
                             {/* Status no Funil */}
                             <td className="py-4 px-6">
-                              {renderBadge(lead.status_funil)}
+                              <div className="flex flex-col gap-1 items-start">
+                                {renderBadge(lead.status_funil)}
+                                {lead.status_funil === 'sem_interesse' && lead.motivo_descarte && (
+                                  <span className="text-[10px] text-rose-700 dark:text-rose-300 font-medium bg-rose-50 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-900/40 rounded px-1.5 py-0.5 line-clamp-1 max-w-[180px]" title={lead.motivo_descarte}>
+                                    Motivo: {lead.motivo_descarte}
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Ações */}
                             <td className="py-4 px-6 text-right">
                               <div className="flex items-center justify-end gap-1.5">
-                                {/* Botão WhatsApp (Ativo) */}
-                                {lead.telefone && (
+                                {/* Se já disse Não, botão de Reativar */}
+                                {lead.status_funil === 'sem_interesse' || lead.status_funil === 'descadastrado' ? (
                                   <button
-                                    onClick={() => handleSendWhatsApp(lead)}
-                                    className="p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer"
-                                    title="Chamar no WhatsApp"
+                                    onClick={() => handleReativarLead(lead)}
+                                    disabled={updatingId === lead.id}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition cursor-pointer text-xs font-semibold"
+                                    title="Reativar Lead para o Funil Ativo"
                                   >
-                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    <span>Reativar</span>
                                   </button>
+                                ) : (
+                                  <>
+                                    {/* Botão Marcar que Disse Não (Remove da lista) */}
+                                    <button
+                                      onClick={() => handleMarcarDisseNao(lead)}
+                                      disabled={updatingId === lead.id}
+                                      className="p-1.5 rounded-lg border border-slate-200 dark:border-neutral-800 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                                      title="Marcar que disse NÃO (remove do funil ativo e cancela disparos)"
+                                    >
+                                      <Ban className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Botão WhatsApp (Ativo) */}
+                                    {lead.telefone && (
+                                      <button
+                                        onClick={() => handleSendWhatsApp(lead)}
+                                        className="p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition cursor-pointer"
+                                        title="Chamar no WhatsApp"
+                                      >
+                                        <MessageCircle className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+
+                                    {/* Iniciar Sequência de E-mails (5 Toques) */}
+                                    <button
+                                      onClick={() => handleIniciarSequencia(lead)}
+                                      disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
+                                      className={`p-1.5 rounded-lg border transition ${
+                                        lead.status_funil === 'em_sequencia'
+                                          ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
+                                          : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer'
+                                      }`}
+                                      title={
+                                        lead.status_funil === 'em_sequencia'
+                                          ? 'Sequência já em andamento'
+                                          : 'Iniciar Sequência de E-mails (5 toques)'
+                                      }
+                                    >
+                                      <Mail className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Agendar Reunião */}
+                                    <button
+                                      onClick={() => handleOpenScheduleModal(lead)}
+                                      className="p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer"
+                                      title="Agendar Reunião no Google Agenda"
+                                    >
+                                      <Calendar className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
                                 )}
-
-                                {/* Iniciar Sequência de E-mails (5 Toques) */}
-                                <button
-                                  onClick={() => handleIniciarSequencia(lead)}
-                                  disabled={lead.status_funil === 'em_sequencia' || updatingId === lead.id}
-                                  className={`p-1.5 rounded-lg border transition ${
-                                    lead.status_funil === 'em_sequencia'
-                                      ? 'border-sky-300 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 opacity-80 cursor-default'
-                                      : 'border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 cursor-pointer'
-                                  }`}
-                                  title={
-                                    lead.status_funil === 'em_sequencia'
-                                      ? 'Sequência já em andamento'
-                                      : 'Iniciar Sequência de E-mails (5 toques)'
-                                  }
-                                >
-                                  <Mail className="w-3.5 h-3.5" />
-                                </button>
-
-                                {/* Agendar Reunião */}
-                                <button
-                                  onClick={() => handleOpenScheduleModal(lead)}
-                                  className="p-1.5 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition cursor-pointer"
-                                  title="Agendar Reunião no Google Agenda"
-                                >
-                                  <Calendar className="w-3.5 h-3.5" />
-                                </button>
 
                                 {/* Editar */}
                                 <button
